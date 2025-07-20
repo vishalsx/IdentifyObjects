@@ -10,7 +10,15 @@ import json
 import re
 
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+API_KEY = os.getenv("GOOGLE_API_KEY")
+if not API_KEY:
+    raise ValueError("GOOGLE_API_KEY environment variable not set")
 os.environ["GOOGLE_API_KEY"] = API_KEY
+
 
 app = FastAPI()
 
