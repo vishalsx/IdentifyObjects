@@ -1,0 +1,23 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore VSCode settings
+.vscode/
+
+# Ignore virtual environment
+venv/
+.env
+
+# Ignore macOS system file
+.DS_Store
+
+# Ignore log files
+*.log
+
+# Ignore Node.js dependencies
+node_modules/
+
+# Ignore build output
+dist/
+build/
