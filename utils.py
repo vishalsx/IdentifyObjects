@@ -9,8 +9,7 @@ import os
 import json
 import re
 
-# Hardcoded Gemini API Key (for development only)
-API_KEY = "AIzaSyCF6waaaJFNmbLYdT5QM8CC-9T3mJ0PYw0"
+
 os.environ["GOOGLE_API_KEY"] = API_KEY
 
 app = FastAPI()
