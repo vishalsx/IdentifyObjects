@@ -78,7 +78,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Streamlit app title
-st.title("alphaTUB App - AI features")
+st.title("alphaTUB App - TUBShots with AI")
 
 # Container for uploader and language selection
 with st.container():
