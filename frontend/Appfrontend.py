@@ -89,7 +89,7 @@ with st.container():
             type=["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "bmp", "tiff", "tif"],
             label_visibility="collapsed"
         )
-        language_options = ["Hindi", "Khasi", "Garo", "Marathi", "Kokborok", "Spanish", "French", "German", "Bengali", "Tamil", "Telugu"]
+        language_options = ["Hindi", "Punjabi", "Khasi", "Garo", "Marathi", "Kokborok", "Spanish", "French", "German", "Bengali", "Tamil", "Telugu"]
         selected_language = st.selectbox("Select Language", language_options, label_visibility="collapsed")
     else:
         # Horizontal layout for desktop
@@ -101,7 +101,7 @@ with st.container():
                 label_visibility="collapsed"
             )
         with col2:
-            language_options = ["Hindi", "Khasi", "Garo", "Marathi", "Kokborok", "Spanish", "French", "German", "Bengali", "Tamil", "Telugu"]
+            language_options = ["Hindi", "Punjabi", "Khasi", "Garo", "Marathi", "Kokborok", "Spanish", "French", "German", "Bengali", "Tamil", "Telugu"]
             selected_language = st.selectbox("Select Language", language_options, label_visibility="collapsed")
 
 # Separator for clarity
