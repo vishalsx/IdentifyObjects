@@ -21,3 +21,8 @@ node_modules/
 # Ignore build output
 dist/
 build/
+
+.env
+.streamlit/secrets.toml
+__pycache__/
+*.pyc

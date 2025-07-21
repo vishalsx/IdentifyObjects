@@ -3,6 +3,14 @@ import requests
 from PIL import Image
 import io
 import streamlit.components.v1 as components
+from dotenv import load_dotenv
+import os
+
+ # Load environment variables
+load_dotenv()
+API_URL = os.getenv("FASTAPI_URL", "http://localhost:8000/identify-object/")
+
+
 
 # JavaScript to detect screen width and store in session state
 if "screen_width" not in st.session_state:
@@ -127,7 +135,7 @@ with st.container():
                 try:
                     # Send POST request to FastAPI endpoint
                     response = requests.post(
-                        "http://localhost:8000/identify-object/",
+                        API_URL,
                         files=files,
                         data=data
                     )
@@ -186,7 +194,7 @@ with st.container():
                     try:
                         # Send POST request to FastAPI endpoint
                         response = requests.post(
-                            "http://localhost:8000/identify-object/",
+                            API_URL,
                             files=files,
                             data=data
                         )
