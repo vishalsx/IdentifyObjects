@@ -5,12 +5,11 @@ import io
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 import os
+import base64
 
- # Load environment variables
+# Load environment variables
 load_dotenv()
 API_URL = os.getenv("FASTAPI_URL", "http://localhost:8000/identify-object/")
-
-
 
 # JavaScript to detect screen width and store in session state
 if "screen_width" not in st.session_state:
@@ -32,7 +31,7 @@ if st.session_state.get("screen_width") is None:
 # Define mobile threshold
 is_mobile = st.session_state.screen_width < 600
 
-# Custom CSS for responsiveness, spacing, and preventing overlap
+# Custom CSS for responsiveness, spacing, preventing overlap, and drag-and-drop styling
 st.markdown("""
     <style>
     /* Add padding and margins to containers */
@@ -74,32 +73,129 @@ st.markdown("""
     .results-container {
         padding: 10px;
     }
+    /* Drag and drop styling */
+    .drag-drop-zone {
+        border: 2px dashed #ccc;
+        padding: 20px;
+        text-align: center;
+        background-color: #f9f9f9;
+        cursor: pointer;
+        margin-bottom: 15px;
+    }
+    .drag-drop-zone:hover {
+        background-color: #e0e0e0;
+    }
+    .drag-drop-zone.dragover {
+        border-color: #007bff;
+        background-color: #e6f0ff;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # Streamlit app title
 st.title("alphaTUB App - TUBShots with AI")
 
+# Custom drag-and-drop component
+def drag_drop_uploader():
+    components.html("""
+        <div id="drag-drop-zone" class="drag-drop-zone">
+            Drag and drop an image here or click to upload<br>
+            <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,.bmp,.tiff,.tif" style="display: none;">
+            <small>Supported formats: jpg, jpeg, png, heic, heif, webp, gif, bmp, tiff, tif</small>
+        </div>
+        <script>
+            const dragDropZone = document.getElementById('drag-drop-zone');
+            const fileInput = document.getElementById('fileInput');
+
+            // Open file input on click
+            dragDropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // Handle drag events
+            dragDropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dragDropZone.classList.add('dragover');
+            });
+
+            dragDropZone.addEventListener('dragleave', () => {
+                dragDropZone.classList.remove('dragover');
+            });
+
+            // Handle file drop
+            dragDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dragDropZone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+
+            // Handle file input change
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length > 0) {
+                    handleFile(fileInput.files[0]);
+                }
+            });
+
+            // Function to handle file and send to Streamlit
+            function handleFile(file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const fileData = {
+                        name: file.name,
+                        type: file.type,
+                        content: e.target.result.split(',')[1] // Base64 content without data URL prefix
+                    };
+                    window.parent.postMessage({
+                        type: 'streamlit:setComponentValue',
+                        value: fileData
+                    }, '*');
+                };
+                reader.readAsDataURL(file);
+            }
+        </script>
+    """, height=100)
+
+    # Check if a file was uploaded via drag-and-drop
+    if "drag_drop_file" in st.session_state:
+        file_data = st.session_state.get("drag_drop_file")
+        if file_data and all(k in file_data for k in ["name", "type", "content"]):
+            # Convert base64 content back to bytes
+            file_bytes = base64.b64decode(file_data["content"])
+            return type("UploadedFile", (), {
+                "name": file_data["name"],
+                "type": file_data["type"],
+                "read": lambda self: file_bytes,
+                "seek": lambda self, offset: None  # Dummy seek for compatibility
+            })()
+    return None
+
 # Container for uploader and language selection
 with st.container():
     if is_mobile:
         # Vertical layout for mobile
-        uploaded_file = st.file_uploader(
-            "Upload an image",
-            type=["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "bmp", "tiff", "tif"],
-            label_visibility="collapsed"
-        )
+        uploaded_file = drag_drop_uploader()
+        if not uploaded_file:
+            uploaded_file = st.file_uploader(
+                "Upload an image",
+                type=["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "bmp", "tiff", "tif"],
+                label_visibility="collapsed"
+            )
         language_options = ["Hindi", "Punjabi", "Khasi", "Garo", "Marathi", "Kokborok", "Spanish", "French", "German", "Bengali", "Tamil", "Telugu"]
         selected_language = st.selectbox("Select Language", language_options, label_visibility="collapsed")
     else:
         # Horizontal layout for desktop
         col1, col2 = st.columns([2, 1], gap="medium")
         with col1:
-            uploaded_file = st.file_uploader(
-                "Upload an image",
-                type=["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "bmp", "tiff", "tif"],
-                label_visibility="collapsed"
-            )
+            uploaded_file = drag_drop_uploader()
+            if not uploaded_file:
+                uploaded_file = st.file_uploader(
+                    "Upload an image",
+                    type=["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "bmp", "tiff", "tif"],
+                    label_visibility="collapsed"
+                )
         with col2:
             language_options = ["Hindi", "Punjabi", "Khasi", "Garo", "Marathi", "Kokborok", "Spanish", "French", "German", "Bengali", "Tamil", "Telugu"]
             selected_language = st.selectbox("Select Language", language_options, label_visibility="collapsed")
