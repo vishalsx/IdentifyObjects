@@ -4,10 +4,11 @@ from PIL import Image
 import io
 from dotenv import load_dotenv
 import os
+import time
 
 # Load environment variables
 load_dotenv()
-API_URL = os.getenv("FASTAPI_URL", "http://localhost:8000/identify-object/")
+API_URL = os.getenv("FASTAPI_URL", "https://identifyobjects.onrender.com/identify-object/")
 
 # JavaScript to detect screen width and store in session state
 if "screen_width" not in st.session_state:
@@ -158,17 +159,27 @@ with st.container():
                 data = {"language": selected_language}
 
                 try:
-                    # Send POST request to FastAPI endpoint with CORS headers
-                    response = requests.post(
-                        API_URL,
-                        files=files,
-                        data=data,
-                        headers={
-                            "Origin": "http://localhost:8501",  # Match Streamlit's origin
-                            "Accept": "application/json"
-                        },
-                        timeout=10  # Add timeout to prevent hanging
-                    )
+                    # Send POST request to FastAPI endpoint with increased timeout and retry
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            response = requests.post(
+                                API_URL,
+                                files=files,
+                                data=data,
+                                headers={
+                                    "Accept": "application/json"
+                                },
+                                timeout=30  # Increased timeout to 30 seconds
+                            )
+                            break
+                        except requests.exceptions.ReadTimeout:
+                            if attempt < max_retries - 1:
+                                time.sleep(2 ** attempt)  # Exponential backoff
+                                continue
+                            raise
+                    else:
+                        raise requests.exceptions.ReadTimeout(f"Max retries ({max_retries}) reached")
 
                     # Check if the request was successful
                     if response.status_code == 200:
@@ -203,7 +214,7 @@ with st.container():
                     else:
                         st.error(f"Error: {response.status_code} - {response.text}")
                 except requests.exceptions.RequestException as e:
-                    st.error(f"Failed to connect to the API: {str(e)}. Ensure the backend is running at {API_URL} and CORS is configured for http://localhost:8501.")
+                    st.error(f"Failed to connect to the API: {str(e)}. Ensure the backend is running at {API_URL} and CORS is configured for the deployed app origin.")
         else:
             # Side-by-side layout for desktop
             col_image, col_results = st.columns([1, 2], gap="large")
@@ -223,17 +234,27 @@ with st.container():
                     data = {"language": selected_language}
 
                     try:
-                        # Send POST request to FastAPI endpoint with CORS headers
-                        response = requests.post(
-                            API_URL,
-                            files=files,
-                            data=data,
-                            headers={
-                                "Origin": "http://localhost:8501",  # Match Streamlit's origin
-                                "Accept": "application/json"
-                            },
-                            timeout=10  # Add timeout to prevent hanging
-                        )
+                        # Send POST request to FastAPI endpoint with increased timeout and retry
+                        max_retries = 3
+                        for attempt in range(max_retries):
+                            try:
+                                response = requests.post(
+                                    API_URL,
+                                    files=files,
+                                    data=data,
+                                    headers={
+                                        "Accept": "application/json"
+                                    },
+                                    timeout=30  # Increased timeout to 30 seconds
+                                )
+                                break
+                            except requests.exceptions.ReadTimeout:
+                                if attempt < max_retries - 1:
+                                    time.sleep(2 ** attempt)  # Exponential backoff
+                                    continue
+                                raise
+                        else:
+                            raise requests.exceptions.ReadTimeout(f"Max retries ({max_retries}) reached")
 
                         # Check if the request was successful
                         if response.status_code == 200:
@@ -268,7 +289,7 @@ with st.container():
                         else:
                             st.error(f"Error: {response.status_code} - {response.text}")
                     except requests.exceptions.RequestException as e:
-                        st.error(f"Failed to connect to the API: {str(e)}. Ensure the backend is running at {API_URL} and CORS is configured for http://localhost:8501.")
+                        st.error(f"Failed to connect to the API: {str(e)}. Ensure the backend is running at {API_URL} and CORS is configured for the deployed app origin.")
                 else:
                     st.write("Click 'Identify Object' to see results.")
     else:
