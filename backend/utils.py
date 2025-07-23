@@ -23,7 +23,7 @@ os.environ["GOOGLE_API_KEY"] = API_KEY
 app = FastAPI()
 
 def get_gemini_model_vision():
-    return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.8)
+    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=1)
 
 def identify_and_translate(image_bytes: bytes, target_language: str) -> dict:
     try:
@@ -58,9 +58,10 @@ You are an expert visual AI assistant. You will be shown an image and given a ta
 
 Your task is to:
 1. Identify the primary object in the image. 
-2. Generate a short object name in English (e.g., "apple", "bicycle"). Do not use any classifiers or adjectives, and just identify the name of the object.
+2. Generate a one word object name in English (e.g., "apple", "bicycle"). Do not use any classifiers or adjectives, and just identify the name of the object.
 3. Translate the object name into the requested language.
 4. Generate a short description in English providing a 15-70 words description about the object's origin, properties, etc. (e.g., "This is a red apple, grown in Shimla in India. It is considered very healthy if eaten daily..."). Do not exceed the description beyond 70 words.
+5. End the short english description with a a trivia local to the region of requested language
 5. Translate the short description into the requested language.
 6. Generate a hint text in English without revealing the real name of object. This is required for a kids' game.
 7. Translate the hint into the requested language also.
