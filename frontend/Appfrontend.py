@@ -29,10 +29,17 @@ if st.session_state.get("screen_width") is None:
 # Define mobile threshold
 is_mobile = st.session_state.screen_width < 600
 
-# Custom CSS for responsiveness, spacing, and preventing overlap
+# Custom CSS for responsiveness, spacing, and FYNSEC-inspired design
 st.markdown("""
     <style>
-    /* Add padding and margins to containers */
+    /* Base styling with dark theme and teal accents */
+    body {
+        background: linear-gradient(135deg, #0A0A0A, #1A1A1A);
+        color: #F5F5F5;
+    }
+    .stApp {
+        background: transparent;
+    }
     .stContainer > div {
         padding: 15px;
         margin-bottom: 15px;
@@ -43,12 +50,22 @@ st.markdown("""
         max-height: 200px;
         object-fit: contain;
         margin-bottom: 15px;
+        border-radius: 8px;
     }
     /* Style for button */
     .stButton > button {
         margin-top: 15px;
         margin-bottom: 15px;
         width: 100%;
+        background-color: #00C4B4;
+        color: white;
+        border: none;
+        padding: 10px;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton > button:hover {
+        background-color: #00A99E;
     }
     /* Stack columns vertically on mobile */
     @media (max-width: 600px) {
@@ -58,7 +75,7 @@ st.markdown("""
             margin-bottom: 20px;
         }
         .stMarkdown {
-            font-size: 14px; /* Smaller font for mobile */
+            font-size: 14px;
         }
     }
     /* Ensure text doesn't overflow */
@@ -66,16 +83,27 @@ st.markdown("""
         word-wrap: break-word;
         max-width: 100%;
         margin-bottom: 15px;
+        color: #E5E7EB;
     }
-    /* Add spacing around results */
+    /* Results container with shadow */
     .results-container {
         padding: 10px;
+        background-color: #1A1A1A;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    /* Error styling */
+    .stError {
+        background-color: #7F1D1D;
+        color: #FECACA;
+        padding: 10px;
+        border-radius: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # Streamlit app title
-st.title("alphaTUB App - TUBShots with AI")
+st.title("alphaTUB - AI Vision Explorer")
 
 # Container for uploader and language selection
 with st.container():
@@ -130,16 +158,22 @@ with st.container():
                 data = {"language": selected_language}
 
                 try:
-                    # Send POST request to FastAPI endpoint
+                    # Send POST request to FastAPI endpoint with CORS headers
                     response = requests.post(
                         API_URL,
                         files=files,
-                        data=data
+                        data=data,
+                        headers={
+                            "Origin": "http://localhost:8501",  # Match Streamlit's origin
+                            "Accept": "application/json"
+                        },
+                        timeout=10  # Add timeout to prevent hanging
                     )
 
                     # Check if the request was successful
                     if response.status_code == 200:
                         result = response.json()
+                        st.session_state.result = result  # Store result in session state
                         
                         # Check for error in API response
                         if "error" in result:
@@ -149,30 +183,30 @@ with st.container():
                         else:
                             with st.container():
                                 st.markdown("""
-                                    **Object Name (English):** {0}  
-                                    **Object Name (Translated):** {1} ({2})  
-                                    **Description (English):** {3}  
-                                    **Description (Translated):** {4}  
-                                    **Hint (English):** {5}  
-                                    **Hint (Translated):** {6}
+                                    <div class="results-container">
+                                        <strong style="color: #00C4B4;">English Object Name:</strong> {0}<br>
+                                        <strong style="color: #00C4B4;">Translated Object Name:</strong> {1} ({2})<br>
+                                        <strong style="color: #00C4B4;">English Description:</strong> {3}<br>
+                                        <strong style="color: #00C4B4;">Translated Description:</strong> {4}<br>
+                                        <strong style="color: #00C4B4;">English Hint:</strong> {5}<br>
+                                        <strong style="color: #00C4B4;">Translated Hint:</strong> {6}
+                                    </div>
                                 """.format(
-                                    result["object_name_en"],
-                                    result["object_name_translated"],
-                                    result["translated_to"],
-                                    result["object_description_en"],
-                                    result["object_description_translated"],
-                                    result["object_hint_en"],
-                                    result["object_hint_translated"]
-                                ))
+                                    result["object_name_en"] or "N/A",
+                                    result["object_name_translated"] or "N/A",
+                                    result["translated_to"] or "N/A",
+                                    result["object_description_en"] or "N/A",
+                                    result["object_description_translated"] or "N/A",
+                                    result["object_hint_en"] or "N/A",
+                                    result["object_hint_translated"] or "N/A"
+                                ), unsafe_allow_html=True)
                     else:
                         st.error(f"Error: {response.status_code} - {response.text}")
                 except requests.exceptions.RequestException as e:
-                    st.error(f"Failed to connect to the API: {str(e)}")
-            else:
-                st.write("Click 'Identify Object' to see results.")
+                    st.error(f"Failed to connect to the API: {str(e)}. Ensure the backend is running at {API_URL} and CORS is configured for http://localhost:8501.")
         else:
             # Side-by-side layout for desktop
-            col_image, col_results = st.columns([1, 3], gap="large")
+            col_image, col_results = st.columns([1, 2], gap="large")
             with col_image:
                 try:
                     image = Image.open(io.BytesIO(image_bytes))
@@ -189,16 +223,22 @@ with st.container():
                     data = {"language": selected_language}
 
                     try:
-                        # Send POST request to FastAPI endpoint
+                        # Send POST request to FastAPI endpoint with CORS headers
                         response = requests.post(
                             API_URL,
                             files=files,
-                            data=data
+                            data=data,
+                            headers={
+                                "Origin": "http://localhost:8501",  # Match Streamlit's origin
+                                "Accept": "application/json"
+                            },
+                            timeout=10  # Add timeout to prevent hanging
                         )
 
                         # Check if the request was successful
                         if response.status_code == 200:
                             result = response.json()
+                            st.session_state.result = result  # Store result in session state
                             
                             # Check for error in API response
                             if "error" in result:
@@ -208,25 +248,27 @@ with st.container():
                             else:
                                 with st.container():
                                     st.markdown("""
-                                        **Object Name (English):** {0}  
-                                        **Object Name (Translated):** {1} ({2})  
-                                        **Description (English):** {3}  
-                                        **Description (Translated):** {4}  
-                                        **Hint (English):** {5}  
-                                        **Hint (Translated):** {6}
+                                        <div class="results-container">
+                                            <strong style="color: #00C4B4;">English Object Name:</strong> {0}<br>
+                                            <strong style="color: #00C4B4;">Translated Object Name:</strong> {1} ({2})<br>
+                                            <strong style="color: #00C4B4;">English Description:</strong> {3}<br>
+                                            <strong style="color: #00C4B4;">Translated Description:</strong> {4}<br>
+                                            <strong style="color: #00C4B4;">English Hint:</strong> {5}<br>
+                                            <strong style="color: #00C4B4;">Translated Hint:</strong> {6}
+                                        </div>
                                     """.format(
-                                        result["object_name_en"],
-                                        result["object_name_translated"],
-                                        result["translated_to"],
-                                        result["object_description_en"],
-                                        result["object_description_translated"],
-                                        result["object_hint_en"],
-                                        result["object_hint_translated"]
-                                    ))
+                                        result["object_name_en"] or "N/A",
+                                        result["object_name_translated"] or "N/A",
+                                        result["translated_to"] or "N/A",
+                                        result["object_description_en"] or "N/A",
+                                        result["object_description_translated"] or "N/A",
+                                        result["object_hint_en"] or "N/A",
+                                        result["object_hint_translated"] or "N/A"
+                                    ), unsafe_allow_html=True)
                         else:
                             st.error(f"Error: {response.status_code} - {response.text}")
                     except requests.exceptions.RequestException as e:
-                        st.error(f"Failed to connect to the API: {str(e)}")
+                        st.error(f"Failed to connect to the API: {str(e)}. Ensure the backend is running at {API_URL} and CORS is configured for http://localhost:8501.")
                 else:
                     st.write("Click 'Identify Object' to see results.")
     else:
@@ -235,7 +277,7 @@ with st.container():
             st.write("No image uploaded.")
             st.info("Please upload an image to identify.")
         else:
-            col_image, col_results = st.columns([1, 3], gap="large")
+            col_image, col_results = st.columns([1, 2], gap="large")
             with col_image:
                 st.write("No image uploaded.")
             with col_results:
