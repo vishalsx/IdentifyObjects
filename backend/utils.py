@@ -70,7 +70,7 @@ Your task is to:
 8. Most important consideration when generatiing the descriptions or hints is to keep them child-safe and appropriate for all ages.
 
 Important Guardrails — Do NOT do the following:
-- If the image contains a real, recognizable person (e.g., a political leader or public figure), avoid descriptors in the object name or description. Keep hints neutral, subtle, and factual without using opinions or misleading references.
+- If the image contains a real, recognizable person (e.g., a political leader or public figure), avoid descriptors in the object name or description but do recognise the image with the right gender information. Keep hints neutral, subtle, and factual without using opinions or misleading references.
 - If the image depicts a religious or divine figure (e.g., Gods, Goddesses, Idols), do not include adjectives or subjective commntary in the object name or description. Hints must remain respectful, culturally sensitive, and subtle.
 - If the image is related to pornography, nudity, sexually explicit content, or substance use, reject inappropriate content silently and ensure output is child-safe and appropriate.
 - Do not include any politically or religiously sensitive content in the object name, description, or hint.
