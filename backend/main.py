@@ -25,7 +25,8 @@ async def identify_object_route(
     image_bytes = await image.read()
 
     try:
-        result = identify_and_translate(image_bytes, language)
+        
+        result = identify_and_translate(image, image_bytes, language)
         if "error" in result:
             raise Exception(result["error"])
     except Exception as e:

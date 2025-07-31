@@ -8,6 +8,8 @@ from langchain.schema import HumanMessage, SystemMessage
 import os
 import json
 import re
+import csv
+from datetime import datetime
 
 
 from dotenv import load_dotenv
@@ -25,7 +27,7 @@ app = FastAPI()
 def get_gemini_model_vision():
     return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=1)
 
-def identify_and_translate(image_bytes: bytes, target_language: str) -> dict:
+def identify_and_translate(orig_image: Image, image_bytes: bytes, target_language: str) -> dict:
     try:
         # Validate image_bytes
         if not image_bytes:
@@ -98,12 +100,25 @@ JSON Format:
 
         model = get_gemini_model_vision()
         response = model.invoke(messages)
+  
+       
+       
 
         # Attempt to parse JSON output
         try:
             raw_output = response.content.strip()
             cleaned_output = re.sub(r"^```(json)?|```$", "", raw_output.strip(), flags=re.MULTILINE).strip()
             result = json.loads(cleaned_output)
+
+            # Write detaile to the log file    
+            log_response_to_csv(
+            orig_image=orig_image,
+            image_bytes=image_bytes,
+            target_language=target_language,
+            response=response,
+            result=result,
+            file_path="gemini_log.csv"
+            )
             return result
         except Exception as e:
             return {
@@ -114,23 +129,37 @@ JSON Format:
     except Exception as e:
         return {"error": f"Unexpected error in identify_and_translate: {str(e)}"}
 
-@app.post("/identify-object/")
-async def identify_object_route(
-    image: UploadFile = File(...),
-    language: str = Form(...)
-):
-    if not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image.")
 
-    image_bytes = await image.read()
 
-    # Debug: Log file details
-    print(f"Received file: {image.filename}, Content-Type: {image.content_type}, Size: {len(image_bytes)} bytes")
+def log_response_to_csv(orig_image: Image, image_bytes: bytes, target_language: str, response: ChatGoogleGenerativeAI, result: any,file_path: str = "gemini_log.csv"):
+    file_exists = os.path.isfile(file_path)
+    with open(file_path, "a", newline="", encoding="utf-8") as csvfile:
+        
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow(["DateTime", "ImageFileName", "ImageSizeBytes", "InputTokens", "OutputTokens", "TotalTokens", "Result"])
+        
+        image_filename = orig_image.filename if hasattr(orig_image, 'filename') else "uploaded_image.png"
+       # image_size_bytes = len(orig_image.tobytes()) if hasattr(orig_image, 'tobytes') else 0
+        image_size_bytes = response.usage_metadata.get("image_size_bytes", len(image_bytes))
+        input_tokens = response.usage_metadata["input_tokens"]
+        output_tokens = response.usage_metadata["output_tokens"]
+        total_tokens = response.usage_metadata["total_tokens"]
+     
+        print(f"image_filename= {image_filename}")
+        print(f"image_size_bytes= {image_size_bytes} bytes")
+        print(f"translation_language={target_language}")
 
-    try:
-        result = identify_and_translate(image_bytes, language)
-        if "error" in result:
-            raise HTTPException(status_code=500, detail=f"Processing error: {result['error']}")
-        return JSONResponse(content=result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
+        print(f"Input Tokens: {input_tokens}")
+        print(f"Output Tokens: {output_tokens}")
+        print(f"Total Tokens: {total_tokens}")
+        print(f"Response content: {response.content}")
+        writer.writerow([
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            image_filename,
+            image_size_bytes,
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            result
+        ])
