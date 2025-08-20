@@ -12,6 +12,7 @@ import csv
 from datetime import datetime
 
 
+
 from dotenv import load_dotenv
 import os
 
@@ -86,6 +87,7 @@ JSON Format:
   "object_description_translated": "<description sentence in the requested language>",
   "object_hint_en": "<a hint which can be used by kids to recognize the object>",
   "object_hint_translated": "<hint in the requested language which can be used by kids to recognize the object>"
+  "object_category": "<category of the object, e.g., 'plant', 'flower', 'animal', 'building', 'vehicle', 'food', 'clothing', 'tool', 'furniture'>"
 }
 
 
