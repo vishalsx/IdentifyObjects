@@ -1,29 +1,25 @@
 # login.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
-from pydantic import BaseModel, Field   
-from typing import List
+from pydantic import BaseModel
+from typing import List, Dict, Any
 import jwt
 import datetime
-import os
 from dotenv import load_dotenv
+import os
 
-from typing import Dict, Any, List, Optional
+# --- IMPORT CENTRALIZED DB CONNECTION ---
+from db.connection import db  # use db directly
 
 # --- CONFIG ---
 load_dotenv()  # Load environment variables from .env file
 
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-MONGODB_DBNAME  = os.getenv("MONGODB_DBNAME", "PublicObjects")
-SECRET_KEY = os.getenv("SECRET_KEY","super-secret-key")  # use env var in production
+SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
-client = AsyncIOMotorClient(MONGODB_URI)
-db = client[MONGODB_DBNAME]
+# db = db_client[db_name]  # use shared db client
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 router = APIRouter()
 
 # --- SCHEMAS ---
@@ -65,37 +61,12 @@ async def get_roles(roles: List[str]):
     cursor = db["roles"].find({"_id": {"$in": roles}})
     return await cursor.to_list(length=None)
 
-from fastapi import HTTPException
 
-users_collection = db.users
-roles_collection = db.roles
 
-# async def get_user_permissions(username: str) -> list[str]:
-#     # 1. Find user
-#     user = await users_collection.find_one({"username": username})
-#     if not user:
-#         raise HTTPException(status_code=404, detail=f"User {username} not found")
+users_collection = db["users"]
+roles_collection = db["roles"]
+permission_rules_collection = db["permission_rules"]
 
-#     # 2. Ensure roles is a list
-#     roles = user.get("roles")
-#     if not roles:
-#         raise HTTPException(status_code=400, detail=f"User {username} has no roles assigned")
-
-#     if isinstance(roles, str):
-#         roles = [roles]  # convert single role string to list
-
-#     # 3. Find role documents for all roles
-#     cursor = roles_collection.find({"_id": {"$in": roles}})
-#     role_docs = await cursor.to_list(length=None)
-
-#     if not role_docs:
-#         raise HTTPException(status_code=404, detail=f"No role documents found for {roles}")
-
-#     # 4. Merge permissions, remove duplicates using set
-#     permissions = {perm for role in role_docs for perm in role.get("permissions", [])}
-
-#     # 5. Return as list
-#     return list(permissions)
 
 async def get_user_permissions(username: str) -> dict:
     """
@@ -209,6 +180,7 @@ async def create_user(user: CreateUserRequest):
 @router.post("/login", response_model=LoginResponse)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     print("Login attempt for user:", form_data.username, form_data.password)
+    print(f"\n DBNAME:{db.name}\nColletions:{await db.list_collection_names()} ")
     user = await get_user(form_data.username)
     if not user:
         raise HTTPException(

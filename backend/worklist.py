@@ -1,34 +1,33 @@
-from fastapi import FastAPI, HTTPException
+# routers/worklist.py
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
-from bson import ObjectId  #pip install pymongo or #pip install bson
-import motor.motor_asyncio
-import hashlib
-import datetime
-import os   
-import base64
-from dotenv import load_dotenv
 from pymongo import ReturnDocument
-from db_crud import map_object_colletion, map_translation_collection
+from bson import ObjectId
+from db.db_crud import map_object_collection, map_translation_collection
+from db.connection import db  # centralized DB connection
+from fileinfo import process_file_info
+
+from db.connection import (
+    objects_collection,
+    translations_collection,
+    counters_collection,
+    permission_rules_collection,
+    roles_collection,
+    users_collection,
+    languages_collection,
+    MONGODB_DBNAME,
+)
+router = APIRouter()
 
 
-load_dotenv()  # Load environment variables from .env file
-
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-MONGODB_DBNAME  = os.getenv("MONGODB_DBNAME", "alphatubplay")
-
-
-# MongoDB setup
-client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
-db = client[MONGODB_DBNAME]
-objects_collection = db["objects"]
-translations_collection = db["translations"]
-counters_collection = db["counters"]
-permission_rules_collection = db["permission_rules"]
-roles_collection = db["roles"]
-users_collection = db["users"]
-
-app = FastAPI()
+# # --- COLLECTIONS ---
+# objects_collection = db["objects"]
+# translations_collection = db["translations"]
+# counters_collection = db["counters"]
+# permission_rules_collection = db["permission_rules"]
+# roles_collection = db["roles"]
+# users_collection = db["users"]
 
 
 async def get_workitem_for_user(current_user: dict, languages: List[str] = None):
@@ -101,8 +100,9 @@ async def get_workitem_for_user(current_user: dict, languages: List[str] = None)
             continue
 
         result = {"image_base64": obj.get("image_base64")}
-        result.update(map_object_colletion(obj))
+        result.update(map_object_collection(obj))
         result.update(map_translation_collection(translation))
+        result.update( await process_file_info(None,None,obj.get("image_name"),obj.get("_id")))
 
         results.append(result)
         print(f"✅ Workitem found for user {user_id} in language {lang}")

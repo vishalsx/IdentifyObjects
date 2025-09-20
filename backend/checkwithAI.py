@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+
 from PIL import Image, UnidentifiedImageError
 import io
 import base64
@@ -10,7 +10,8 @@ import json
 import re
 import csv
 from datetime import datetime
-from db_crud import get_existing_data_imagehash, get_language_details
+from db.db_crud import get_existing_data_imagehash, get_language_details
+from fileinfo import process_file_info
 
 
 from dotenv import load_dotenv
@@ -21,9 +22,6 @@ API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable not set")
 os.environ["GOOGLE_API_KEY"] = API_KEY
-# OLD_SERVICE = os.getenv("OLD_SERVICE", "false").lower() == "true"
-
-app = FastAPI()
 
 
 SYSTEM_PROMPT = """
@@ -63,13 +61,13 @@ Your core tasks are:
    - Same rules as the longer hint.  
    - Write it in the `language_script`.  
 
-7. Generate **tags in English only** (list of words). Example for apple: `["food", "fruit", "red", "healthy", "snack"]`.  
+7. Generate **tags in English** (list of words). Example for apple: `["food", "fruit", "red", "healthy", "snack"]`.  
 
 8. Generate a **category in English** (e.g., "plant", "flower", "animal", "building", "vehicle", "food", "clothing", "tool", "furniture", "other").  
 
 9. Generate a **field of study in English** (e.g., "botany", "zoology", "architecture", "culinary arts", "engineering", "art history").  
 
-10. Identify the **age appropriateness**: "all ages", "kids", "teens", "adults", "seniors".  
+10. Generate the **age appropriateness in English**: "all ages", "kids", "teens", "adults", "seniors".  
 
 ---
 
@@ -77,7 +75,7 @@ Important Guardrails:
 - If the image contains a known celebrity, political leader, or divine/religious figure → only provide **neutral, respectful details**. No opinions or negative commentary.  
 - If the image depicts inappropriate/explicit content → respond with `"Inappropriate content."` for all fields.  
 - Never include politically or religiously sensitive or controversial content.  
-
+- If you find any vilations in the guardrail rule, raise this error in the error JSON tag
 ---
 
 Output strictly in **valid JSON only** (no markdown, no comments).  
@@ -94,6 +92,7 @@ Output JSON format:
   "object_category": "<category in English>",
   "field_of_study": "<field of study in English>",
   "age_appropriate": "<all ages | kids | teens | adults | seniors>"
+  "error:" "<Inappropriate content detected. Can't be processed..>"
 }
 """
 
@@ -102,33 +101,31 @@ def get_gemini_model_vision():
 
 
 
-async def identify_and_translate(imagehash: str, image_bytes: bytes, target_language: str) -> dict:
+async def identify_and_translate(image_base64: str, imagehash:str, image_filename: str,target_language: str) -> dict:
     try:
-        # Validate image_bytes
-        if not image_bytes:
-            return {"error": "Empty image data received"}
+        # # Validate image_bytes
+        # if not image_bytes:
+        #     return {"error": "Empty image data received"}
         
-        # Debug: Log the size of the image data
-        print(f"Image bytes size: {len(image_bytes)} bytes")
+        # # Debug: Log the size of the image data
+        # print(f"Image bytes size: {len(image_bytes)} bytes")
         
-        # Validate image format
-        try:
-            image = Image.open(io.BytesIO(image_bytes))
-            # Ensure image is in RGB mode
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-            # Debug: Log image format and size
-            # print(f"Image format: {image.format}, Size: {image.size}")
-        except UnidentifiedImageError as e:
-            return {"error": f"Failed to identify image: {str(e)}"}
-        except Exception as e:
-            return {"error": f"Failed to process image with PIL: {str(e)}"}
+        # try:
+        #     image = Image.open(io.BytesIO(image_bytes))
+        #     # Ensure image is in RGB mode
+        #     if image.mode != "RGB":
+        #         image = image.convert("RGB")
+        # except UnidentifiedImageError as e:
+        #     return {"error": f"Failed to identify image: {str(e)}"}
+        # except Exception as e:
+        #     return {"error": f"Failed to process image with PIL: {str(e)}"}
 
-        # Convert image to base64 for Gemini
-        buffered = io.BytesIO()
-        image.save(buffered, format="PNG")
-        image_base64 = base64.b64encode(buffered.getvalue()).decode()
+        # # Convert image to base64 for Gemini 
+        # buffered = io.BytesIO() 
+        # image.save(buffered, format="PNG") 
+        # image_base64 = base64.b64encode(buffered.getvalue()).decode()
 
+        result = {}
         image_found_in_database = True
         existing_result = None
         object_found = False
@@ -146,7 +143,7 @@ async def identify_and_translate(imagehash: str, image_bytes: bytes, target_lang
             # print("Existing result returned:", existing_result)
 
             if existing_result:
-                print("Image found in the DataBase for object Name in En:",existing_result.get("object_name_en"))
+                print("Image found for object Name in En:",existing_result.get("object_name_en"))
                 if existing_result.get("flag_translation") and existing_result.get("flag_object"):
                     return existing_result  # ✅ return DB copy immediately as both the details are found
                 else:
@@ -166,7 +163,7 @@ async def identify_and_translate(imagehash: str, image_bytes: bytes, target_lang
             image_found_in_database = False  # ✅ ensure AI still runs
 
       
-        print("Image Found flag:", image_found_in_database)
+        print("Translations found:", image_found_in_database)
 
         if not image_found_in_database:
         # AI invoked if the image wasnt found in our own database
@@ -189,7 +186,9 @@ async def identify_and_translate(imagehash: str, image_bytes: bytes, target_lang
             ]
 
             model = get_gemini_model_vision()
-            response = model.invoke(messages)
+            #response = await model.invoke(messages)
+            response = await model.ainvoke(messages) #Changed to Async invoke
+
     
             # Attempt to parse JSON output
             try:
@@ -197,23 +196,29 @@ async def identify_and_translate(imagehash: str, image_bytes: bytes, target_lang
                 cleaned_output = re.sub(r"^```(json)?|```$", "", raw_output.strip(), flags=re.MULTILINE).strip()
                 result = json.loads(cleaned_output) 
                 
+                if "error" in result:
+                    return {"error": "Inappropriate content uploaded.."}
+                    
+                    
+        
                 #insert the state of database match for Object and Translation
                 print(f"AI Output for {target_language}:", result)
                 # print("\nAppending Object:", object_found)
                 # print("\nAppending translation",translation_found)
 
-                #Overwrite common data fields if already available in database. Dont use AI fields in this case for commondata only.
+               #Overwrite common data fields if already available in database. Dont use AI fields in this case for commondata only.
                 #This cover the case when only object exists and no translation is available. will overwrite only commondata
                 if object_found and existing_result and not translation_found:
                     for field in existing_result:
                         value = existing_result.get(field)
                         if value is not None:   # only copy if exists
                             result[field] = value
-
                 result.update({
                                 "flag_object": object_found,
                                 "flag_translation": translation_found
                 })
+                
+                result.update(await process_file_info(None,image_base64,image_filename,None))
 
                 return result    #return the AI result from here only
             except Exception as e:
