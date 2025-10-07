@@ -8,6 +8,8 @@ import jwt
 import datetime
 from dotenv import load_dotenv
 import os
+import hashlib
+
 
 # --- IMPORT CENTRALIZED DB CONNECTION ---
 from db.connection import db  # use db directly
@@ -19,7 +21,17 @@ SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 # db = db_client[db_name]  # use shared db client
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Support both old bcrypt hashes and new bcrypt_sha256
+from passlib.context import CryptContext
+
+# Modern, secure password context
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"   
+)
+
+
 router = APIRouter()
 
 # --- SCHEMAS ---
@@ -49,9 +61,18 @@ class CreateUserResponse(BaseModel):
 
 # --- UTILS ---
 def hash_password(password: str) -> str:
+
+    if len(password.encode('utf-8')) > 72:
+        # Pre-hash long passwords with SHA256 to ensure they're under 72 bytes
+        password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+
     return pwd_context.hash(password)
 
 def verify_password(plain_password, hashed_password) -> bool:
+
+    if len(plain_password.encode('utf-8')) > 72:
+        plain_password = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+    
     return pwd_context.verify(plain_password, hashed_password)
 
 async def get_user(username: str):
@@ -153,8 +174,12 @@ async def create_user(user: CreateUserRequest):
     if existing_phone:
         raise HTTPException(status_code=400, detail="Phone number already exists")
 
-    # hash the password
-    hashed_pw = hash_password(user.password)
+     # hash the password (now handles long passwords properly)
+    try:
+        hashed_pw = hash_password(user.password)
+    except Exception as e:
+        print(f"Password hashing failed: {e}")
+        raise HTTPException(status_code=500, detail="Password processing failed")
 
     doc = {
         "username": user.username,

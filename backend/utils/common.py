@@ -1,51 +1,27 @@
 import base64
-from PIL import Image
+from PIL import Image, ImageOps, ImageDraw, ImageFont
 import io
-from fastapi import UploadFile
+from fastapi import UploadFile, HTTPException, BackgroundTasks
 import hashlib
 import base64
-from typing import Union
-from fastapi import HTTPException
-from PIL import Image
+from typing import Union, Any
+from services.userauth import get_current_user_id
+
 from datetime import datetime, timezone
+import io
+import numpy as np
+
+from services.userauth import get_current_user_id
+# --- Storage clients ---
+from storage.storage_config import STORAGE_PROVIDER, BUCKET_NAME, CDN_BASE_URL, s3_client, gcs_client
+from botocore.exceptions import ClientError
 
 
 from db.connection import (
-    objects_collection,
-    translations_collection,
     counters_collection,
     permission_rules_collection,
-    roles_collection,
-    users_collection,
-    languages_collection,
-    MONGODB_DBNAME,
 )
-import io
-import base64
-import hashlib
-from typing import Union
-from PIL import Image
 
-
-import io
-import hashlib
-import base64
-from PIL import Image, ImageOps
-from typing import Union
-from fastapi import UploadFile
-import numpy as np
-
-
-############ Hash Generation (Perpetual) ###############
-############ conversion to base64 ######################
-
-import io
-import hashlib
-import base64
-from PIL import Image, ImageOps
-from typing import Union, Any
-from fastapi import UploadFile
-import numpy as np
 
 def compute_perceptual_hash(img: Image.Image) -> str:
     """
@@ -74,9 +50,15 @@ async def normalize_image(image: Union[UploadFile, bytes, str, Image.Image]) -> 
     Enhanced for browser consistency.
     """
     # --- Convert input into PIL.Image ---
-    if hasattr(image, 'read') and hasattr(image, 'file'):  # Check for UploadFile-like object
-        image_bytes = await image.read()
-        image.file.seek(0)  # reset file pointer so it can be reused later
+    # if hasattr(image, 'read') and hasattr(image, 'file'):  # Check for UploadFile-like object
+    #     image_bytes = await image.read()
+    #     image.file.seek(0)  # reset file pointer so it can be reused later
+    #     img = Image.open(io.BytesIO(image_bytes))
+    if hasattr(image, "file"):  # UploadFile
+        image.file.seek(0)  # rewind every time before reading
+        image_bytes = image.file.read()
+        if not image_bytes:
+            raise ValueError("UploadFile is empty or could not be read")
         img = Image.open(io.BytesIO(image_bytes))
     elif isinstance(image, bytes):
         img = Image.open(io.BytesIO(image))
@@ -122,9 +104,17 @@ async def compute_hash(image: Union[UploadFile, bytes, str, Image.Image]):
     """
     # Get PIL image for perceptual hash (before normalization)
     if hasattr(image, 'read') and hasattr(image, 'file'):  # Check for UploadFile-like object
-        image_bytes = await image.read()
-        image.file.seek(0)
-        img = Image.open(io.BytesIO(image_bytes))
+        image.file.seek(0)  # rewind pointer
+        # image_bytes = await image.read()
+        image_bytes = image.file.read()
+        # image.file.seek(0)
+        # img = Image.open(io.BytesIO(image_bytes))
+        if not image_bytes:
+            raise ValueError("UploadFile is empty or has no data")
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+        except Exception as e:
+            raise ValueError(f"Failed to identify image from UploadFile: {str(e)}")
     elif isinstance(image, bytes):
         img = Image.open(io.BytesIO(image))
     elif isinstance(image, str):
@@ -167,9 +157,6 @@ async def image_to_base64(image: Union[UploadFile, bytes, str, Image.Image]) -> 
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
     else:
         raise ValueError(f"Unsupported input type: {type(image)}")
-
-
-
 
 
 ######## Audit Function #######
@@ -273,3 +260,5 @@ async def get_permission_state_translations(current_translations_state: str, act
     if translations_next is None:
         raise HTTPException(status_code=400, detail=f"Invalid Translation state transition for action {action} from state {normalized_current_translation_state}")
     return translations_next
+
+

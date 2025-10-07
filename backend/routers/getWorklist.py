@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from userauth import get_current_user
-from worklist import get_workitem_for_user
+from services.userauth import get_current_user
+from services.worklist import get_workitem_for_user
 import traceback
 
 router = APIRouter(prefix="/worklist", tags=["worklist"])

@@ -18,6 +18,24 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+import contextvars
+
+# Async-safe context variable to store user info
+_current_user: contextvars.ContextVar[dict] = contextvars.ContextVar("current_user", default=None)
+
+
+def set_current_user(user: dict):
+    """Set current user info in context (call per request)"""
+    _current_user.set(user)
+
+
+def get_current_user_id() -> str | None:
+    """Retrieve the user_id from context, returns None if not set"""
+    user = _current_user.get()
+    return user.get("user_id") if user else None
+
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     """
     Decode the JWT token and normalize the user dict so every route
@@ -49,6 +67,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     if not user_role:
         raise HTTPException(status_code=403, detail="No role assigned to this user")
 
+    user_info = {"user_id": user_id, "role": user_role}
+
+    # Store globally in context variable for this request
+    set_current_user(user_info)
+    
     return {
         "user_id": user_id,
         "role": user_role

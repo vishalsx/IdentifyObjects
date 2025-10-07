@@ -4,9 +4,12 @@ from pydantic import BaseModel
 from typing import List, Optional
 from pymongo import ReturnDocument
 from bson import ObjectId
-from db.db_crud import map_object_collection, map_translation_collection
+from services.db_crud import map_object_collection, map_translation_collection,create_return_file_info
 from db.connection import db  # centralized DB connection
-from fileinfo import process_file_info
+from services.fileinfo import process_file_info
+from services.userauth import get_current_user
+from storage.imagestore import retrieve_image
+
 
 from db.connection import (
     objects_collection,
@@ -98,11 +101,16 @@ async def get_workitem_for_user(current_user: dict, languages: List[str] = None)
         obj = await objects_collection.find_one({"_id": translation["object_id"]})
         if not obj:
             continue
-
-        result = {"image_base64": obj.get("image_base64")}
+        #image to be retrieved from Storage and converted to base64
+        image_store = obj.get("image_store", {})
+        image_base64 = await retrieve_image(image_store)
+        result = {"image_base64": image_base64}
+        
+        # result = {"image_base64": obj.get("image_base64")}
         result.update(map_object_collection(obj))
         result.update(map_translation_collection(translation))
-        result.update( await process_file_info(None,None,obj.get("image_name"),obj.get("_id")))
+        # result.update( await process_file_info(None,None,obj.get("image_name"),obj.get("_id")))
+        result.update(create_return_file_info(obj))
 
         results.append(result)
         print(f"✅ Workitem found for user {user_id} in language {lang}")

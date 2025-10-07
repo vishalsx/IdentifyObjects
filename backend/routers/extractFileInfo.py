@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
-from fileinfo import process_file_info
+from services.fileinfo import process_file_info
 
 router = APIRouter(prefix="/fileinfo", tags=["fileinfo"])
 

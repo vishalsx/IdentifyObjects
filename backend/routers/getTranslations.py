@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from userauth import get_current_user
-from db.db_crud import get_objects_translations_collection
+from services.userauth import get_current_user
+from services.db_crud import get_objects_translations_collection
 from bson import ObjectId
 
 router = APIRouter(prefix="/translations", tags=["translations"])

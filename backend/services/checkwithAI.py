@@ -1,17 +1,14 @@
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 
 from PIL import Image, UnidentifiedImageError
 import io
 import base64
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.schema import HumanMessage, SystemMessage
-import os
+
 import json
 import re
-import csv
-from datetime import datetime
-from db.db_crud import get_existing_data_imagehash, get_language_details
-from fileinfo import process_file_info
+from services.db_crud import get_existing_data_imagehash, get_language_details
+from services.fileinfo import process_file_info
 
 
 from dotenv import load_dotenv
@@ -100,31 +97,8 @@ def get_gemini_model_vision():
     return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=1)
 
 
-
 async def identify_and_translate(image_base64: str, imagehash:str, image_filename: str,target_language: str) -> dict:
     try:
-        # # Validate image_bytes
-        # if not image_bytes:
-        #     return {"error": "Empty image data received"}
-        
-        # # Debug: Log the size of the image data
-        # print(f"Image bytes size: {len(image_bytes)} bytes")
-        
-        # try:
-        #     image = Image.open(io.BytesIO(image_bytes))
-        #     # Ensure image is in RGB mode
-        #     if image.mode != "RGB":
-        #         image = image.convert("RGB")
-        # except UnidentifiedImageError as e:
-        #     return {"error": f"Failed to identify image: {str(e)}"}
-        # except Exception as e:
-        #     return {"error": f"Failed to process image with PIL: {str(e)}"}
-
-        # # Convert image to base64 for Gemini 
-        # buffered = io.BytesIO() 
-        # image.save(buffered, format="PNG") 
-        # image_base64 = base64.b64encode(buffered.getvalue()).decode()
-
         result = {}
         image_found_in_database = True
         existing_result = None
@@ -143,12 +117,13 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
             # print("Existing result returned:", existing_result)
 
             if existing_result:
-                print("Image found for object Name in En:",existing_result.get("object_name_en"))
-                if existing_result.get("flag_translation") and existing_result.get("flag_object"):
+                object_found = existing_result.get("flag_object", False)
+                translation_found = existing_result.get("flag_translation", False)
+
+                print("Object Name in En:",existing_result.get("object_name_en"))
+                if object_found is True and translation_found is True:
                     return existing_result  # ✅ return DB copy immediately as both the details are found
                 else:
-                    object_found = existing_result.get("flag_object")
-                    translation_found = existing_result.get("flag_translation")
                     print("\nObject Status:", object_found)
                     print("\nTranslation result:", translation_found)
                     image_found_in_database = False
@@ -208,7 +183,7 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
 
                #Overwrite common data fields if already available in database. Dont use AI fields in this case for commondata only.
                 #This cover the case when only object exists and no translation is available. will overwrite only commondata
-                if object_found and existing_result and not translation_found:
+                if object_found is True and existing_result and translation_found is False:
                     for field in existing_result:
                         value = existing_result.get(field)
                         if value is not None:   # only copy if exists

@@ -1,11 +1,14 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from checkwithAI import identify_and_translate
+from services.checkwithAI import identify_and_translate
 from db.connection import objects_collection
-from db.db_crud import compute_hash, retrieve_object_id
-from userauth import get_current_user
+from services.db_crud import compute_hash, retrieve_object_id
+from services.userauth import get_current_user
 from typing import Optional
-from common import image_to_base64
+from utils.common import image_to_base64
+from storage.imagestore import retrieve_image
+
+
 router = APIRouter(prefix="/identify", tags=["identify"])
 
   
@@ -24,7 +27,12 @@ async def identify_object(
             raise HTTPException(status_code=404, detail="No object found for given image_hash")
 
         image_filename = doc.get("image_name")
-        image_base64 = doc.get("image_base64")    
+        try:
+            image_base64 = await retrieve_image(doc.get("image_store"))
+        # image_base64 = doc.get("image_base64")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve image from storage: {str(e)}")
+        
         imagehash = image_hash
 
     # --- Case 2: Only image provided ---
@@ -44,6 +52,7 @@ async def identify_object(
         result = await identify_and_translate(
             image_base64, imagehash, image_filename, language
         )
+        # print("\n\nFinal result from identify_and_translate: ", result)
         if "error" in result and result["error"]:
             return {"Error": result}
     except HTTPException:

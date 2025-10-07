@@ -4,10 +4,9 @@ from bson import ObjectId
 from PIL import Image
 import base64
 import io
-from db.connection import db, objects_collection # centralized DB connection
-import hashlib
-from common import compute_hash
-
+from db.connection import objects_collection # centralized DB connection
+from utils.common import compute_hash
+from storage.imagestore import retrieve_image
 
 # def compute_hash(data: bytes) -> str:
 #     img = Image.open(io.BytesIO(data)).convert("RGB")
@@ -49,6 +48,7 @@ async def process_file_info(
 
     # --- Case 1: File provided ---
     if file:
+        file.file.seek(0)  # rewind every time before reading
         data_bytes = file.file.read()
         image_hash = await compute_hash(file)
         doc = await objects_collection.find_one({"image_hash": image_hash})
@@ -75,9 +75,15 @@ async def process_file_info(
             raise HTTPException(status_code=404, detail="Object not found")
 
         new_filename = doc.get("image_name")
-        if "image_base64" in doc:
-            data_bytes = decode_base64(doc["image_base64"])
-
+        # if "image_base64" in doc:
+        #     data_bytes = decode_base64(doc["image_base64"])
+        try:
+            if "image_store" in doc:
+                image_store = doc.get("image_store", {})
+                image_base64 = await retrieve_image (image_store)
+                data_bytes = decode_base64(image_base64)
+        except Exception as e:
+            print(f"Failed to retrieve image from storage (supressing the error): {str(e)}")         
     else:
         raise HTTPException(status_code=400, detail="Provide either file, base64, or object_id")
 
@@ -91,10 +97,10 @@ async def process_file_info(
         "size": f"{size} bytes" if size else None,
         "dimensions": f"{w} × {h}" if w and h else None,
         "mime_type": mime_type,
-        "created_by": doc.get("metadata").get("created_by") if doc else None,
-        "created_at": doc.get("metadata").get("created_at") if doc else None,
-        "updated_by": doc.get("metadata").get("updated_by") if doc else None,
-        "updated_at": doc.get("metadata").get("updated_at") if doc else None,
+        # "created_by": doc.get("file_info").get("created_by") if doc else None,
+        # "created_at": doc.get("file_info").get("created_at") if doc else None,
+        # "updated_by": doc.get("file_info").get("updated_by") if doc else None,
+        # "updated_at": doc.get("file_info").get("updated_at") if doc else None,
     }
     # print ("\nFileinfo: ", response)
     return response

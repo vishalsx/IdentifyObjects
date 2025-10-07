@@ -1,6 +1,5 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, BackgroundTasks, UploadFile
 from bson import ObjectId
-from typing import Optional
 import hashlib
 from datetime import datetime, timezone
 import traceback
@@ -10,8 +9,9 @@ import os
 from PIL import Image
 from dotenv import load_dotenv
 from typing import List, Dict, Any
-from fileinfo import process_file_info
-from common import compute_hash, insert_into_audit, get_permission_state_metadata, get_permission_state_translations, get_next_sequence
+from services.fileinfo import process_file_info
+from utils.common import compute_hash, insert_into_audit, get_permission_state_metadata, get_permission_state_translations, get_next_sequence
+from storage.imagestore import store_image, retrieve_image
 load_dotenv()
 
 # ✅ Import MongoDB collections from central connection
@@ -25,6 +25,13 @@ from db.connection import (
     languages_collection,
     MONGODB_DBNAME,
 )
+
+async def get_image_store_from_hash(image_hash:str) -> dict:
+    # This function returns the image store image URL from the given image hash    
+    object_coll =  await objects_collection.find_one( {"image_hash": image_hash} )
+    if object_coll:
+        return object_coll.get("image_store", "")
+    return None
 
 
 async def manage_rejection(common_data: dict) -> dict | None:
@@ -201,7 +208,7 @@ async def update_status_only(common_data: dict, language_row: dict, permission_a
 
 
 # Create Object (with Deduplication + First Translation)
-async def save_to_db(image_name: str,image: str, common_data: any, lang_row: any, permission_action: str):
+async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_row: any, permission_action: str, background_tasks: BackgroundTasks):
     obj_id = None
     translation_id = None
     
@@ -287,16 +294,21 @@ async def save_to_db(image_name: str,image: str, common_data: any, lang_row: any
             try:
                 # Convert image to Base64
                 # image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-                image_base64 = image
-                # Create new object document
-                print ("Creating new object document, common data.")
                 
-              
+                image_store = await store_image(image,background_tasks) #Saved into Store now.
+                # image_base64 = image 
+                # Create new object document
+                print ("Creating new object document: with Image Store", image_store)
+                
+                
+                file_info = await process_file_info(image,None,image_name,None) #fileinfo at the time of creation
+
                 object_document = {
                 "sequence_number": await get_next_sequence(MONGODB_DBNAME), 
                 "image_name": image_name,
                 "image_hash": image_hash,
-                "image_base64": image_base64,
+                # "image_base64": image_base64, #this needs to be to saved through storage
+                "image_store" : image_store,
                 "object_name_en": common_data.get("object_name_en", ""),
                 "image_status": await get_permission_state_metadata (common_data.get("image_status"), permission_action ),
                
@@ -307,7 +319,8 @@ async def save_to_db(image_name: str,image: str, common_data: any, lang_row: any
                     "age_appropriate": common_data.get("age_appropriate", ""),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "created_by": common_data.get("userid", "anonymous"),
-                }
+                },
+                "file_info": file_info,
                 }
                 # object_document.update( copy_objects_collection("create", common_data, {}) ) #Creating rest of the attributes
 
@@ -424,6 +437,49 @@ def map_translation_collection(translation_coll: any):
         return translation_coll_mapped
     return {"error": "No translation data found.."}
 
+# def create_return_file_info(obj_coll: any ) -> dict:
+#     if obj_coll and "file_info" in obj_coll:
+        
+#         file_info_return = obj_coll.get("file_info", {})
+#         file_info_return.update({"created_by": obj_coll.get("metadata", {}).get("created_by", {})}) #merging file info from metadata if any
+#         file_info_return.update(obj_coll.get("metadata", {}).get("created_at", {})) #merging file info from metadata if any
+#         file_info_return.update(obj_coll.get("metadata", {}).get("updated_by", {})) #merging file info from metadata if any
+#         file_info_return.update(obj_coll.get("metadata", {}).get("updated_at", {})) #merging file info from metadata if any
+        
+#     return {file_info_return}
+
+def create_return_file_info(obj_coll: dict) -> dict:
+    file_info = obj_coll.get("file_info", {}) or {}
+    metadata = obj_coll.get("metadata", {}) or {}
+
+    # Handle case where metadata is a list of dicts
+    if isinstance(metadata, list):
+        merged_metadata = {}
+        for m in metadata:
+            if isinstance(m, dict):
+                merged_metadata.update(m)
+        metadata = merged_metadata
+
+    # Extract values safely
+    new_filename = file_info.get("filename")
+    size = file_info.get("size")
+    dimensions = file_info.get("dimensions", "")
+    mime_type = file_info.get("mime_type")
+
+    response = {
+        "filename": new_filename,
+        "size": f"{size}" if size else None,
+        "dimensions": dimensions,
+        "mime_type": mime_type,
+        "created_by": metadata.get("created_by"),
+        "created_at": metadata.get("created_at"),
+        "updated_by": metadata.get("updated_by"),
+        "updated_at": metadata.get("updated_at"),
+    }
+
+    return response
+
+
 
 #getting rid of existing challenges. returning normal object names
 async def get_existing_data_imagehash(imagehash: str, language: str): 
@@ -438,7 +494,7 @@ async def get_existing_data_imagehash(imagehash: str, language: str):
         # print(f"Object found with image hash: {imagehash}")
         print(f"Object metadata: {obj.get('metadata', {})}")
         print(f"Object image status: {obj.get('image_status', '')}")
-
+       
         # ✅ Base response from objects collection
         response = {
             "object_category": obj.get("metadata", {}).get("object_category", ""),
@@ -449,9 +505,13 @@ async def get_existing_data_imagehash(imagehash: str, language: str):
             "image_status": obj.get("image_status", ""),  # metadata object status
             "object_id": str(obj_id),  # Convert ObjectId to string for JSON serialization
             "flag_object": True,
+            # "file_info": create_return_file_info(obj),
         }
+        response.update(create_return_file_info(obj))
+        print("\nBase response from object:", response)
         #Appending fileinfo for the identified object
-        response.update(await process_file_info(None,None,obj.get("image_filename"),obj_id))
+        # response.update(await process_file_info(None,None,obj.get("image_name"),obj_id)) #?? why to send filename?
+        # response.update(await process_file_info(obj_id))
         # ✅ Add translation details if language is provided and exists
         print (f"\nLooking for translation object in {language} for {str(obj_id)}")
         if language:
@@ -481,8 +541,11 @@ async def get_existing_data_imagehash(imagehash: str, language: str):
 
     
 async def get_objects_translations_collection(translation_id) -> dict:
+    
     translation_coll = await translations_collection.find_one({"_id": ObjectId(translation_id)})
     object_id = translation_coll.get("object_id")
+    print("\n Inside translations_collection with object_id of translations:", object_id)
+    # object_coll = await objects_collection.find_one({"_id": ObjectId(object_id)})
     object_coll = await objects_collection.find_one({"_id": ObjectId(object_id)})
     
     return {
@@ -490,7 +553,8 @@ async def get_objects_translations_collection(translation_id) -> dict:
         "translations": translation_coll,
         "flag_object": True,
         "flag_translation": True,
-        "file_info": await process_file_info(None,None,None,object_coll["_id"]),
+        # "file_info": await process_file_info(None,None,None,object_coll["_id"]),
+        "file_info": create_return_file_info(object_coll),
     }
 
 async def mark_translation_doc_unlocked (translation_id: str, userid:str ):
@@ -661,7 +725,7 @@ async def get_recent_translations(userid: str):
     ]
 
     translations = await translations_collection.aggregate(pipeline).to_list(length=3)
-    print("\nDeduped translations: ", translations)
+    print("\nThumbnail translations constructed.. ")
     
     results = []
 
@@ -669,38 +733,67 @@ async def get_recent_translations(userid: str):
         obj_id = t.get("object_id")
         if not obj_id:
             continue
-
+        
         # 5. Fetch corresponding object
+        
         obj_doc = await objects_collection.find_one(
-            {"_id": obj_id}, {"image_hash": 1, "image_base64": 1, "image_name":1}
+            # {"_id": obj_id}, {"image_hash": 1, "image_base64.": 1, "image_name":1} 
+            {"_id": obj_id}, {"image_hash": 1, "image_store":1, "image_name":1, "file_info":1,"metadata":1} 
         )
         if not obj_doc:
             continue
+        
+        # Calculate image_base64 from the store now.
+        image_store = obj_doc.get("image_store", "")
+        image_base64 = await retrieve_image (image_store)
+        
 
-        thumbnail_b64 = make_thumbnail_from_base64(obj_doc.get("image_base64", ""))
+        # thumbnail_b64 = make_thumbnail_from_base64(obj_doc.get("image_base64", ""))
+        thumbnail_b64 = make_thumbnail_from_base64(image_base64)
         # 6. Build return payload
-        file_info = await process_file_info(
-            file=None,
-            base64_str=None,
-            filename=obj_doc.get("image_name"),
-            object_id=obj_id
-        )
-        print("\nFile Info: ", file_info)
+        # file_info = await process_file_info(
+        #     file=None,
+        #     base64_str=None,
+        #     filename=obj_doc.get("image_name"),
+        #     object_id=obj_id
+        # )
+        # print("\nFile Info: ", file_info)
+        # results.append({
+        #     "object": {
+        #         "image_hash": obj_doc.get("image_hash"),
+        #         # "image_base64": obj_doc.get("image_base64"),
+        #         "image_base64": image_base64,
+        #         "thumbnail": thumbnail_b64,
+        #     },
+        #     "translation": {
+        #         "translation_id": str(t["_id"]),
+        #         "requested_language": t.get("requested_language"),
+        #         "translation_status": t.get("translation_status"),
+        #     },
+        #     "permissions": list(user_permissions),
+        #     # "file_info": file_info   # merged here instead of separate append
+        #     "file_info": create_return_file_info(obj_doc),
+        # })
+
         results.append({
             "object": {
                 "image_hash": obj_doc.get("image_hash"),
-                "image_base64": obj_doc.get("image_base64"),
-                "thumbnail": thumbnail_b64,
+                "image_base64": image_base64 or "",
+                "thumbnail": (
+                    thumbnail_b64.decode("utf-8") if isinstance(thumbnail_b64, bytes) 
+                    else (thumbnail_b64 or "")
+                ),
             },
             "translation": {
                 "translation_id": str(t["_id"]),
                 "requested_language": t.get("requested_language"),
                 "translation_status": t.get("translation_status"),
             },
-            "permissions": list(user_permissions),
-            "file_info": file_info   # merged here instead of separate append
+            "permissions": list(user_permissions or []),
+            "file_info": create_return_file_info(obj_doc) or {},
         })
 
+    print("\n Thumbnail Structure: ", results)
     return results
 
 

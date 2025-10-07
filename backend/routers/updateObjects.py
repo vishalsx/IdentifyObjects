@@ -1,11 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
-from db.db_crud import save_to_db, update_status_only
-from userauth import get_current_user
+from services.db_crud import save_to_db, update_status_only
+from services.userauth import get_current_user
 import json, traceback
 from bson import ObjectId
 import datetime
-from common import image_to_base64
 
 router = APIRouter(prefix="/update", tags=["update"])
 
@@ -32,6 +31,7 @@ async def update_object(
     common_attributes: str = Form(...),
     language_attributes: str = Form(...),
     permission_action: str = Form(...),
+    background_tasks: BackgroundTasks = None,
     current_user: dict = Depends(get_current_user)
 ):
     try:
@@ -43,11 +43,11 @@ async def update_object(
             raise HTTPException(status_code=400, detail="language_attributes must be a non-empty list")
 
         if permission_action not in ["ApproveText", "RejectText"]:
-            image_base64 = await image_to_base64(image) if image else None
+            # image_base64 = await image_to_base64(image) if image else None
             image_filename = image.filename if image else None
 
             for lang_item in language_data:
-                resp = await save_to_db(image_filename, image_base64, common_data, lang_item, permission_action)
+                resp = await save_to_db(image_filename, image, common_data, lang_item, permission_action, background_tasks)
                 if resp:
                     response.extend(resp if isinstance(resp, list) else [resp])
         else:
