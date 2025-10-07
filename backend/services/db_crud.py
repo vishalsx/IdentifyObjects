@@ -793,7 +793,7 @@ async def get_recent_translations(userid: str):
             "file_info": create_return_file_info(obj_doc) or {},
         })
 
-    print("\n Thumbnail Structure: ", results)
+    print(f"\n Thumbnail Structure for frist object\nImage hash: {results[0]['object']['image_hash']}\nImage Base64: {results[0]['object']['image_base64'][:10]}...\nThumbnail: {results[0]['object']['thumbnail'][:10]}...\nTranslation ID: {results[0]['translation']['translation_id']}\nRequested Language: {results[0]['translation']['requested_language']}\nTranslation Status: {results[0]['translation']['translation_status']}\nPermissions: {results[0]['permissions']}\nFile Info: {results[0]['file_info']}\n") if results else print("No results found.")
     return results
 
 
