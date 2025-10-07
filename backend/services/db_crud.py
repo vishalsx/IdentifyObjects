@@ -797,28 +797,68 @@ async def get_recent_translations(userid: str):
     return results
 
 
+# def make_thumbnail_from_base64(image_base64: str, size=(128, 128)) -> str:
+#     """
+#     Convert base64 image to thumbnail and return new base64 string.
+#     """
+#     try:
+#         # Decode base64
+#         image_data = base64.b64decode(image_base64)
+#         image = Image.open(io.BytesIO(image_data))
+
+#         # Convert to RGB (in case it's PNG with alpha, etc.)
+#         if image.mode in ("RGBA", "P"):
+#             image = image.convert("RGB")
+
+#         # Create thumbnail
+#         image.thumbnail(size)
+
+#         # Save back to base64
+#         buffer = io.BytesIO()
+#         image.save(buffer, format="JPEG", quality=70)
+#         thumbnail_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+#         return thumbnail_b64
+#     except Exception as e:
+#         print(f"⚠️ Error creating thumbnail: {e}")
+#         return image_base64  # fallback to original
+import base64
+import io
+from PIL import Image
+
 def make_thumbnail_from_base64(image_base64: str, size=(128, 128)) -> str:
     """
-    Convert base64 image to thumbnail and return new base64 string.
+    Convert base64 image to a fixed-size thumbnail (consistent dimensions)
+    with padding to maintain aspect ratio.
+    Returns new base64 string.
     """
     try:
-        # Decode base64
+        # Decode base64 to image
         image_data = base64.b64decode(image_base64)
         image = Image.open(io.BytesIO(image_data))
 
-        # Convert to RGB (in case it's PNG with alpha, etc.)
+        # Convert to RGB to handle alpha channels
         if image.mode in ("RGBA", "P"):
             image = image.convert("RGB")
 
-        # Create thumbnail
-        image.thumbnail(size)
+        # Create thumbnail preserving aspect ratio
+        image.thumbnail(size, Image.Resampling.LANCZOS)
 
-        # Save back to base64
+        # Create a new image with consistent size and white background
+        thumb = Image.new("RGB", size, (255, 255, 255))
+        
+        # Center the thumbnail on the canvas
+        x_offset = (size[0] - image.width) // 2
+        y_offset = (size[1] - image.height) // 2
+        thumb.paste(image, (x_offset, y_offset))
+
+        # Convert back to base64
         buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=70)
+        thumb.save(buffer, format="JPEG", quality=80)
         thumbnail_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
         return thumbnail_b64
+
     except Exception as e:
         print(f"⚠️ Error creating thumbnail: {e}")
         return image_base64  # fallback to original
