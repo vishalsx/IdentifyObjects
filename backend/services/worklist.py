@@ -103,6 +103,7 @@ async def get_workitem_for_user(current_user: dict, languages: List[str] = None)
             continue
         #image to be retrieved from Storage and converted to base64
         image_store = obj.get("image_store", {})
+        print ("\nImage store found :",image_store)
         image_base64 = await retrieve_image(image_store)
         result = {"image_base64": image_base64}
         

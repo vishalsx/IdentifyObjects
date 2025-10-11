@@ -237,11 +237,11 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 if lang_row.get("language", "Unknown").lower() == "english": #update the entire Metadata if send for English, else just update the status
 
                    new_value = {
-                                "object_name_en": common_data.get("object_name_en", existing_object.get("object_name_en", "")),
+                                "object_name_en": (common_data.get("object_name_en", existing_object.get("object_name_en", ""))).title(),
                                 "image_status": new_metadata_state,
                                 "metadata.tags": common_data.get("tags", existing_object.get("metadata", {}).get("tags", [])),
-                                "metadata.object_category": common_data.get("object_category", existing_object.get("metadata", {}).get("object_category", "")),
-                                "metadata.field_of_study": common_data.get("field_of_study", existing_object.get("metadata", {}).get("field_of_study", "")),
+                                "metadata.object_category": (common_data.get("object_category", existing_object.get("metadata", {}).get("object_category", "Other"))).title(),
+                                "metadata.field_of_study": (common_data.get("field_of_study", existing_object.get("metadata", {}).get("field_of_study", "Other"))).title(),
                                 "metadata.age_appropriate": common_data.get("age_appropriate", existing_object.get("metadata", {}).get("age_appropriate", "")),
                                 "metadata.updated_at": datetime.now(timezone.utc).isoformat(),
                                 "metadata.updated_by": common_data.get("userid", "anonymous"),
@@ -309,13 +309,13 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 "image_hash": image_hash,
                 # "image_base64": image_base64, #this needs to be to saved through storage
                 "image_store" : image_store,
-                "object_name_en": common_data.get("object_name_en", ""),
+                "object_name_en": (common_data.get("object_name_en", "")).title(),
                 "image_status": await get_permission_state_metadata (common_data.get("image_status"), permission_action ),
                
                 "metadata": {
                     "tags":common_data.get("tags", []),
-                    "object_category": common_data.get("object_category", ""),
-                    "field_of_study": common_data.get("field_of_study", ""),
+                    "object_category": (common_data.get("object_category", "Other")).title(),
+                    "field_of_study": (common_data.get("field_of_study", "Other")).title(),
                     "age_appropriate": common_data.get("age_appropriate", ""),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "created_by": common_data.get("userid", "anonymous"),
@@ -348,7 +348,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                     }
             audit_entry = await insert_into_audit(
                 translations_collection,
-                {"object_id": obj_id, "requested_language": lang_row.get("language", "Unknown")},
+                {"object_id": obj_id, "requested_language": (lang_row.get("language", "Unknown")).title()},
                 common_data.get("userid", "anonymous"),
                 permission_action,
                 new_value
@@ -361,7 +361,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                     "$set": new_value,
                     "$setOnInsert": {
                         "object_id": obj_id,
-                        "requested_language": lang_row.get("language", "Unknown"),
+                        "requested_language": (lang_row.get("language", "Unknown")).title(),
                         "created_at": datetime.now(timezone.utc).isoformat(),  
                         "created_by": common_data.get("userid", "anonymous"),
                     },
@@ -383,7 +383,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
     existing_doc = await translations_collection.find_one(
     {
     "object_id": obj_id,
-    "requested_language": lang_row.get("language", "Unknown")
+    "requested_language": (lang_row.get("language", "Unknown")).title()
     },
     {"_id": 1}
     )
@@ -399,7 +399,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
 
 # --- API to Retrieve immutable _id by object_name_en ---
 async def retrieve_object_id(object_name_en: str) -> str:
-    obj = await objects_collection.find_one({"object_name_en": object_name_en})
+    obj = await objects_collection.find_one({"object_name_en": object_name_en.title()})
     if not obj:
         raise HTTPException(status_code=404, detail="Object not found")
     return str(obj["_id"])
@@ -410,11 +410,11 @@ def map_object_collection(object_coll: any):
     
     if object_coll:
         object_coll_mapped = {
-            "object_category": object_coll.get("metadata", {}).get("object_category", ""),
+            "object_category": (object_coll.get("metadata", {}).get("object_category", "")).title(),
             "tags": object_coll.get("metadata", {}).get("tags", []),
-            "field_of_study": object_coll.get("metadata", {}).get("field_of_study", ""),
+            "field_of_study": (object_coll.get("metadata", {}).get("field_of_study", "")).title(),
             "age_appropriate": object_coll.get("metadata", {}).get("age_appropriate", ""),
-            "object_name_en": object_coll.get("object_name_en", ""),
+            "object_name_en": (object_coll.get("object_name_en", "")).title(),
             "image_status": object_coll.get("image_status", ""),  # metadata object status
             "object_id": str(object_coll.get("_id")),  # object id required for correct record updation at backend
             "flag_object": True
@@ -425,7 +425,7 @@ def map_object_collection(object_coll: any):
 def map_translation_collection(translation_coll: any):
     if translation_coll:
         translation_coll_mapped = {
-            "requested_language": translation_coll.get("requested_language", ""),
+            "requested_language": (translation_coll.get("requested_language", "")).title(),
             "object_name": translation_coll.get("object_name", ""),
             "object_description": translation_coll.get("object_description", ""),
             "object_hint": translation_coll.get("object_hint", ""),
@@ -497,11 +497,11 @@ async def get_existing_data_imagehash(imagehash: str, language: str):
        
         # ✅ Base response from objects collection
         response = {
-            "object_category": obj.get("metadata", {}).get("object_category", ""),
+            "object_category": (obj.get("metadata", {}).get("object_category", "")).title(),
             "tags": obj.get("metadata", {}).get("tags", []),
-            "field_of_study": obj.get("metadata", {}).get("field_of_study", ""),
+            "field_of_study": (obj.get("metadata", {}).get("field_of_study", "")).title(),
             "age_appropriate": obj.get("metadata", {}).get("age_appropriate", ""),
-            "object_name_en": obj.get("object_name_en", ""),
+            "object_name_en": (obj.get("object_name_en", "")).title(),
             "image_status": obj.get("image_status", ""),  # metadata object status
             "object_id": str(obj_id),  # Convert ObjectId to string for JSON serialization
             "flag_object": True,
@@ -517,7 +517,7 @@ async def get_existing_data_imagehash(imagehash: str, language: str):
         if language:
             translation = await translations_collection.find_one({
                 "object_id": obj_id,
-                "requested_language": language
+                "requested_language": language.title()
             })
             if translation:
                 translation_found = True
