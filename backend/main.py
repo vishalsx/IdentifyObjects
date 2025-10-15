@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # Routers
+
 from routers import (
     identifyObjects,
     updateObjects,
@@ -11,6 +12,7 @@ from routers import (
     skipTranslation,
     extractFileInfo,
     thumbNail,
+    getImagePool
 )
 
 from routers.login import router as login_router
@@ -50,6 +52,7 @@ app.include_router(getTranslations.router)
 app.include_router(skipTranslation.router)
 app.include_router(extractFileInfo.router)
 app.include_router(thumbNail.router)
+app.include_router(getImagePool.router)
 
 
 @app.get("/")

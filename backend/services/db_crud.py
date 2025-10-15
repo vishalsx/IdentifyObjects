@@ -10,7 +10,7 @@ from PIL import Image
 from dotenv import load_dotenv
 from typing import List, Dict, Any
 from services.fileinfo import process_file_info
-from utils.common import compute_hash, insert_into_audit, get_permission_state_metadata, get_permission_state_translations, get_next_sequence
+from utils.common import compute_hash, insert_into_audit, get_permission_state_metadata, get_permission_state_translations, get_next_sequence, make_thumbnail_from_base64
 from storage.imagestore import store_image, retrieve_image
 load_dotenv()
 
@@ -596,17 +596,6 @@ async def get_language_details(language: str):
         return {"error":f"Specified language not found {language}"} 
 
 
-
-# async def previous_work_items (userid: str):
-#     # this function returns last 4 items which the user had worked upon.
-#     #It needs to be extended to all items based on the the sort key sent from frontend
-#     # Returns imagehash, image(only thumbnail), translation status
-
-# from datetime import datetime, timezone
-# from typing import List, Dict, Any
-# from motor.motor_asyncio import AsyncIOMotorCollection
-
-
 async def get_recent_translations(userid: str):
     """
     Return top 3 active translations for a user, joined with their objects.
@@ -750,30 +739,6 @@ async def get_recent_translations(userid: str):
 
         # thumbnail_b64 = make_thumbnail_from_base64(obj_doc.get("image_base64", ""))
         thumbnail_b64 = make_thumbnail_from_base64(image_base64)
-        # 6. Build return payload
-        # file_info = await process_file_info(
-        #     file=None,
-        #     base64_str=None,
-        #     filename=obj_doc.get("image_name"),
-        #     object_id=obj_id
-        # )
-        # print("\nFile Info: ", file_info)
-        # results.append({
-        #     "object": {
-        #         "image_hash": obj_doc.get("image_hash"),
-        #         # "image_base64": obj_doc.get("image_base64"),
-        #         "image_base64": image_base64,
-        #         "thumbnail": thumbnail_b64,
-        #     },
-        #     "translation": {
-        #         "translation_id": str(t["_id"]),
-        #         "requested_language": t.get("requested_language"),
-        #         "translation_status": t.get("translation_status"),
-        #     },
-        #     "permissions": list(user_permissions),
-        #     # "file_info": file_info   # merged here instead of separate append
-        #     "file_info": create_return_file_info(obj_doc),
-        # })
 
         results.append({
             "object": {
@@ -797,68 +762,5 @@ async def get_recent_translations(userid: str):
     return results
 
 
-# def make_thumbnail_from_base64(image_base64: str, size=(128, 128)) -> str:
-#     """
-#     Convert base64 image to thumbnail and return new base64 string.
-#     """
-#     try:
-#         # Decode base64
-#         image_data = base64.b64decode(image_base64)
-#         image = Image.open(io.BytesIO(image_data))
 
-#         # Convert to RGB (in case it's PNG with alpha, etc.)
-#         if image.mode in ("RGBA", "P"):
-#             image = image.convert("RGB")
 
-#         # Create thumbnail
-#         image.thumbnail(size)
-
-#         # Save back to base64
-#         buffer = io.BytesIO()
-#         image.save(buffer, format="JPEG", quality=70)
-#         thumbnail_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-#         return thumbnail_b64
-#     except Exception as e:
-#         print(f"⚠️ Error creating thumbnail: {e}")
-#         return image_base64  # fallback to original
-import base64
-import io
-from PIL import Image
-
-def make_thumbnail_from_base64(image_base64: str, size=(128, 128)) -> str:
-    """
-    Convert base64 image to a fixed-size thumbnail (consistent dimensions)
-    with padding to maintain aspect ratio.
-    Returns new base64 string.
-    """
-    try:
-        # Decode base64 to image
-        image_data = base64.b64decode(image_base64)
-        image = Image.open(io.BytesIO(image_data))
-
-        # Convert to RGB to handle alpha channels
-        if image.mode in ("RGBA", "P"):
-            image = image.convert("RGB")
-
-        # Create thumbnail preserving aspect ratio
-        image.thumbnail(size, Image.Resampling.LANCZOS)
-
-        # Create a new image with consistent size and white background
-        thumb = Image.new("RGB", size, (255, 255, 255))
-        
-        # Center the thumbnail on the canvas
-        x_offset = (size[0] - image.width) // 2
-        y_offset = (size[1] - image.height) // 2
-        thumb.paste(image, (x_offset, y_offset))
-
-        # Convert back to base64
-        buffer = io.BytesIO()
-        thumb.save(buffer, format="JPEG", quality=80)
-        thumbnail_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-        return thumbnail_b64
-
-    except Exception as e:
-        print(f"⚠️ Error creating thumbnail: {e}")
-        return image_base64  # fallback to original

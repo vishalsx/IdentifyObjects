@@ -9,7 +9,6 @@ from services.userauth import get_current_user_id
 from datetime import datetime, timezone
 import io
 
-from services.userauth import get_current_user_id
 # --- Storage clients ---
 from storage.storage_config import STORAGE_PROVIDER, BUCKET_NAME, CDN_BASE_URL, s3_client, gcs_client
 from botocore.exceptions import ClientError

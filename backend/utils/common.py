@@ -16,6 +16,10 @@ from services.userauth import get_current_user_id
 from storage.storage_config import STORAGE_PROVIDER, BUCKET_NAME, CDN_BASE_URL, s3_client, gcs_client
 from botocore.exceptions import ClientError
 
+# for thumbnail
+import base64
+import io
+from PIL import Image
 
 from db.connection import (
     counters_collection,
@@ -260,5 +264,43 @@ async def get_permission_state_translations(current_translations_state: str, act
     if translations_next is None:
         raise HTTPException(status_code=400, detail=f"Invalid Translation state transition for action {action} from state {normalized_current_translation_state}")
     return translations_next
+
+
+def make_thumbnail_from_base64(image_base64: str, size=(128, 128)) -> str:
+    """
+    Convert base64 image to a fixed-size thumbnail (consistent dimensions)
+    with padding to maintain aspect ratio.
+    Returns new base64 string.
+    """
+    try:
+        # Decode base64 to image
+        image_data = base64.b64decode(image_base64)
+        image = Image.open(io.BytesIO(image_data))
+
+        # Convert to RGB to handle alpha channels
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+
+        # Create thumbnail preserving aspect ratio
+        image.thumbnail(size, Image.Resampling.LANCZOS)
+
+        # Create a new image with consistent size and white background
+        thumb = Image.new("RGB", size, (255, 255, 255))
+        
+        # Center the thumbnail on the canvas
+        x_offset = (size[0] - image.width) // 2
+        y_offset = (size[1] - image.height) // 2
+        thumb.paste(image, (x_offset, y_offset))
+
+        # Convert back to base64
+        buffer = io.BytesIO()
+        thumb.save(buffer, format="JPEG", quality=80)
+        thumbnail_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        return thumbnail_b64
+
+    except Exception as e:
+        print(f"⚠️ Error creating thumbnail: {e}")
+        return image_base64  # fallback to original
 
 
