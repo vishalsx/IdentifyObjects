@@ -56,7 +56,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
 
 def get_gemini_embedding(text: str) -> list[float]:
     """Return Gemini embedding vector for a string."""
