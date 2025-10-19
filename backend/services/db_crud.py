@@ -12,6 +12,7 @@ from typing import List, Dict, Any
 from services.fileinfo import process_file_info
 from utils.common import compute_hash, insert_into_audit, get_permission_state_metadata, get_permission_state_translations, get_next_sequence, make_thumbnail_from_base64
 from storage.imagestore import store_image, retrieve_image
+from services.update_embeddings import update_object_embeddings
 load_dotenv()
 
 # ✅ Import MongoDB collections from central connection
@@ -236,7 +237,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
             if new_metadata_state is not None: # Do not update metadata if new transition is None
                 if lang_row.get("language", "Unknown").lower() == "english": #update the entire Metadata if send for English, else just update the status
 
-                   new_value = {
+                    new_value = {
                                 "object_name_en": (common_data.get("object_name_en", existing_object.get("object_name_en", ""))).title(),
                                 "image_status": new_metadata_state,
                                 "metadata.tags": common_data.get("tags", existing_object.get("metadata", {}).get("tags", [])),
@@ -246,22 +247,26 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                                 "metadata.updated_at": datetime.now(timezone.utc).isoformat(),
                                 "metadata.updated_by": common_data.get("userid", "anonymous"),
                         }
-                   print ("New Value:", new_value)
-                   audit_entry = await insert_into_audit(
+                    print ("New Value:", new_value)
+                    audit_entry = await insert_into_audit(
                        objects_collection,
                        {"_id": obj_id},
                        common_data.get("userid", "anonymous"),
                        permission_action,
                        new_value
-                   )
+                    )
                    
-                   await objects_collection.update_one(
+                    await objects_collection.update_one(
                         {"_id": obj_id},
                         {
                         "$set": new_value,
                         "$push": {"audit_trail": audit_entry}
                     }
                     )
+                try: # Trigger background task to update embeddings if English
+                    background_tasks.add_task(update_object_embeddings,obj_id)  
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
 
                 else: #just update the state transition if not english
                     print("\nUpdating only status of Object as the language is not English.")
@@ -325,8 +330,13 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 # object_document.update( copy_objects_collection("create", common_data, {}) ) #Creating rest of the attributes
 
                 new_object = await objects_collection.insert_one(object_document)
-                obj_id = new_object.inserted_id
-                # Create initial translation document   
+                obj_id = new_object.inserted_id # Create initial translation document   
+                
+                try: # Trigger background task to update embedding
+                    background_tasks.add_task(update_object_embeddings,obj_id)  
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
+            
             except Exception as e:
                 # Log error but don't block the main response
                 print(f"MongoDB insert error on Object collection: {e}")
