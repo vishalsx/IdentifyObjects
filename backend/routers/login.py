@@ -204,7 +204,7 @@ async def create_user(user: CreateUserRequest):
 # --- LOGIN ENDPOINT ---
 @router.post("/login", response_model=LoginResponse)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    print("Login attempt for user:", form_data.username, form_data.password)
+    print("Login attempt for user:", form_data.username)
     print(f"\n DBNAME:{db.name}\nColletions:{await db.list_collection_names()} ")
     user = await get_user(form_data.username)
     if not user:

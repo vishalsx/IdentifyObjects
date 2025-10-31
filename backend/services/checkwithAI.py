@@ -94,7 +94,7 @@ Output JSON format:
 """
 
 def get_gemini_model_vision():
-    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=1)
+    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
 
 
 async def identify_and_translate(image_base64: str, imagehash:str, image_filename: str,target_language: str) -> dict:

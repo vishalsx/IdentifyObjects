@@ -31,16 +31,61 @@ genai.configure(api_key=GEMINI_API_KEY)
 # 🧩 Helper functions
 # ----------------------------------------
 
-def build_embedding_text(obj: dict) -> str:
+# def build_embedding_text(obj: dict, translations: any) -> str:
+#     """Construct text for embedding from object fields."""
+#     parts = []
+
+#     # parts.extend = ([
+#     #     obj.get("object_name_en", ""),
+#     #     obj.get("metadata", {}).get("object_category", ""),
+#     #     obj.get("metadata", {}).get("field_of_study", ""),
+#     #     " ".join(obj.get("metadata", {}).get("tags", []))
+#     # ])
+#     parts.extend([  # ✅ Use () not =
+#         obj.get("object_name_en", ""),
+#         obj.get("metadata", {}).get("object_category", ""),
+#         obj.get("metadata", {}).get("field_of_study", ""),
+#         " ".join(obj.get("metadata", {}).get("tags", []))
+#     ])
+
+#  # Add translations (object_name_translated, tags_translated, etc.)
+#     for t in translations:
+#         translated_name = t.get("object_name", "")
+#         # translated_tags = t.get("tags_translated", [])
+#         if translated_name:
+#             parts.append(translated_name)
+#         # if translated_tags:
+#         #     parts.extend(translated_tags)
+
+#     combined_text = " ".join(filter(None, parts)).strip()
+#     return combined_text
+
+def build_embedding_text(obj: dict, translations: list) -> str:
     """Construct text for embedding from object fields."""
-    parts = [
+    parts = []
+
+    # ✅ FIXED: Use extend() not extend =
+    parts.extend([
         obj.get("object_name_en", ""),
         obj.get("metadata", {}).get("object_category", ""),
         obj.get("metadata", {}).get("field_of_study", ""),
-        " ".join(obj.get("metadata", {}).get("tags", [])),
-    ]
+        " ".join(obj.get("metadata", {}).get("tags", []))
+    ])
+
+    # Add translations (object_name_translated, tags_translated, etc.)
+    for t in translations:
+        translated_name = t.get("object_name", "")
+        if translated_name:
+            parts.append(translated_name)
+
+    # Filter out empty strings and join
     combined_text = " ".join(filter(None, parts)).strip()
+    
+    # Log for debugging
+    logger.debug(f"Embedding text built: {combined_text[:100]}...")
+    
     return combined_text
+
 
 
 def get_text_embedding(text: str):
@@ -72,8 +117,15 @@ async def update_object_embeddings(object_id: ObjectId ):
         if not obj:
             logger.warning(f"⚠️ Object {object_id} not found for embedding update.")
             return
+        # --- Fetch translations for this object ---
+        translation = await translations_collection.find(
+            {"object_id": object_id}, 
+            {"object_name": 1}
+        ).to_list(length=None)
 
-        embedding_text = build_embedding_text(obj)
+
+
+        embedding_text = build_embedding_text(obj, translation)
         if not embedding_text:
             logger.warning(f"⚠️ Object {object_id} has no text to embed.")
             return

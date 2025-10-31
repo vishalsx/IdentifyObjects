@@ -12,7 +12,10 @@ from routers import (
     skipTranslation,
     extractFileInfo,
     thumbNail,
-    getImagePool
+    getImagePool,
+    createBook,
+    searchBook,
+    createStory
 )
 
 from routers.login import router as login_router
@@ -53,6 +56,9 @@ app.include_router(skipTranslation.router)
 app.include_router(extractFileInfo.router)
 app.include_router(thumbNail.router)
 app.include_router(getImagePool.router)
+app.include_router(createBook.router)
+app.include_router(searchBook.router)
+app.include_router(createStory.router)
 
 
 @app.get("/")

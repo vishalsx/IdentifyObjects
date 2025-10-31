@@ -97,8 +97,9 @@ websockets==15.0.1
 yarl==1.20.1
 google_cloud_storage
 
-
-
+langdetect>=2.1.1               # For document language detection
+unicodedata2>=14.0.0            # Improved Unicode support for text processing
+rapidfuzz>=2.16.1                 # For efficient string matching and deduplication
 # --- Vector Search & Embeddings Enhancements ---
 sentence-transformers>=2.2.2     # For fallback local embedding generation
 torch>=2.0.0                     # Needed by SentenceTransformer

@@ -263,10 +263,12 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                         "$push": {"audit_trail": audit_entry}
                     }
                     )
-                try: # Trigger background task to update embeddings if English
-                    background_tasks.add_task(update_object_embeddings,obj_id)  
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
+                ##Following block moved just before return statement to ensure embedding update after Object and translation insert
+
+                # try: # Trigger background task to update embeddings if English
+                #     background_tasks.add_task(update_object_embeddings,obj_id)  
+                # except Exception as e:
+                #     raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
 
                 else: #just update the state transition if not english
                     print("\nUpdating only status of Object as the language is not English.")
@@ -327,15 +329,16 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 },
                 "file_info": file_info,
                 }
-                # object_document.update( copy_objects_collection("create", common_data, {}) ) #Creating rest of the attributes
 
                 new_object = await objects_collection.insert_one(object_document)
                 obj_id = new_object.inserted_id # Create initial translation document   
                 
-                try: # Trigger background task to update embedding
-                    background_tasks.add_task(update_object_embeddings,obj_id)  
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
+                ##Moving the embedding update to after translation insert##
+
+                # try: # Trigger background task to update embedding
+                #     background_tasks.add_task(update_object_embeddings,obj_id)  
+                # except Exception as e:
+                #     raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
             
             except Exception as e:
                 # Log error but don't block the main response
@@ -343,7 +346,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 raise HTTPException(status_code=500, detail="Failed to save object to database")
 
         try:
-            # In any case insert the translation data whether exists or doesn't
+            # In any case upsert the translation data whether exists or doesn't
             # assumption is that obj_id of objects collection is always present at this stage.
             new_value = {
                     "object_name": lang_row.get("object_name", ""),
@@ -380,6 +383,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 upsert=True
             )
 
+
         except Exception as e:
             print(f"MongoDB insert error on translation collection: {e}") # Not sure why error.
             raise HTTPException(status_code=500, detail="Failed to save translation to database")
@@ -399,6 +403,13 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
     )
     translation_id = existing_doc["_id"] if existing_doc else None  
     print("Inserted find_one translation id:", translation_id)
+
+
+    # Update vector embedding of Object data alongwith translations data for multilingual vector search
+    try: # Trigger background task to update embedding
+            background_tasks.add_task(update_object_embeddings,obj_id)  
+    except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
 
 
     return {"status": "success", 
