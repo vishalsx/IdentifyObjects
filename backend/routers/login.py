@@ -1,15 +1,15 @@
 # login.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from passlib.context import CryptContext
-from pydantic import BaseModel
-from typing import List, Dict, Any
+
+
+from typing import List
 import jwt
 import datetime
 from dotenv import load_dotenv
 import os
 import hashlib
-
+from models.loginauth import LoginResponse, CreateUserRequest, CreateUserResponse, pwd_context
 
 # --- IMPORT CENTRALIZED DB CONNECTION ---
 from db.connection import db  # use db directly
@@ -25,39 +25,10 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 # Support both old bcrypt hashes and new bcrypt_sha256
 from passlib.context import CryptContext
 
-# Modern, secure password context
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"   
-)
 
 
 router = APIRouter()
 
-# --- SCHEMAS ---
-
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    username: str
-    roles: List[str]
-    permissions: List[str]
-    languages_allowed: List[str]
-    permission_rules: Dict[str, Any]  # ✅ detailed permission rules
-
-
-class CreateUserRequest(BaseModel):
-    username: str
-    email_id: str
-    phone: str
-    password: str
-    roles: List[str]   # ✅ now always an array
-    languages_allowed: List[str]
-    country: str
-
-class CreateUserResponse(BaseModel):
-    message: str
-    user_id: str
 
 # --- UTILS ---
 def hash_password(password: str) -> str:
@@ -153,7 +124,7 @@ async def get_user_permissions(username: str) -> dict:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    to_encode.update({"exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)})
+    to_encode.update({"exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # --- CREATE USER ENDPOINT ---

@@ -85,6 +85,7 @@ async def create_or_update_book(
 
         # 🔢 STEP 2: Calculate counts (safe defaults)
         chapters = book_data.get("chapters", [])
+        #Use the following for a quick summary
         book_data["chapter_count"] = len(chapters)
         book_data["page_count"] = sum(len(ch.get("pages", [])) for ch in chapters)
         book_data["image_count"] = sum(
@@ -121,6 +122,13 @@ async def create_or_update_book(
         book_data["created_at"] = datetime.utcnow()
         result = await books_collection.insert_one(book_data)
         book_data["_id"] = result.inserted_id
+
+        # check the right count from a ever increasing sequence undera  book Id before returning it to frontend.
+        book_id_sequence = str(book_data["_id"])
+        book_data["chapter_count"] = await get_next_sequence(book_id_sequence + ".BOOK.CHAPTER")
+        book_data["page_count"] = await get_next_sequence(book_id_sequence + ".BOOK.PAGE")
+        book_data["image_count"] = await get_next_sequence(book_id_sequence + ".BOOK.IMAGE")
+        
 
         safe_book_data = convert_objectid_to_str(book_data)
         print(f"📘 Created new book: {book.title}")
