@@ -13,6 +13,37 @@ from storage.imagestore import retrieve_image
 #     return hashlib.sha256(img.tobytes()).hexdigest()
 
 #     #return hashlib.sha256(data).hexdigest()
+def create_return_file_info(obj_coll: dict) -> dict:
+    file_info = obj_coll.get("file_info", {}) or {}
+    metadata = obj_coll.get("metadata", {}) or {}
+
+    # Handle case where metadata is a list of dicts
+    if isinstance(metadata, list):
+        merged_metadata = {}
+        for m in metadata:
+            if isinstance(m, dict):
+                merged_metadata.update(m)
+        metadata = merged_metadata
+
+    # Extract values safely
+    new_filename = file_info.get("filename")
+    size = file_info.get("size")
+    dimensions = file_info.get("dimensions", "")
+    mime_type = file_info.get("mime_type")
+
+    response = {
+        "filename": new_filename,
+        "size": f"{size}" if size else None,
+        "dimensions": dimensions,
+        "mime_type": mime_type,
+        "created_by": metadata.get("created_by"),
+        "created_at": metadata.get("created_at"),
+        "updated_by": metadata.get("updated_by"),
+        "updated_at": metadata.get("updated_at"),
+    }
+
+    return response
+
 
 
 def get_image_info(data: bytes):

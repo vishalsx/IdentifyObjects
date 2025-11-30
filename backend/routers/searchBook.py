@@ -54,7 +54,7 @@ async def search_books(
 
         for b in results:
             b["_id"] = str(b["_id"])
-        print("\nResults:", results)
+        # print("\nResults:", results)
         return results
 
     except Exception as e:
@@ -75,7 +75,7 @@ async def get_book_data(
             raise HTTPException(status_code=404, detail="Book not found")
         else:
             book["_id"] = str(book["_id"])
-            print (f"\nBook id: {book_id}, \nbook data: {book}")
+            # print (f"\nBook id: {book_id}, \nbook data: {book}")
             return book
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching chapters: {str(e)}")
@@ -165,6 +165,7 @@ async def get_page_images(
     book_id: str, 
     chapter_identifier: str, 
     page_identifier: str,
+    image_id: Optional[str] = Query(None, description="Optional image ID filter"),
     current_user: dict = Depends(get_current_user)
     ):
     """
@@ -198,9 +199,20 @@ async def get_page_images(
 
         if not page:
             raise HTTPException(status_code=404, detail="Page not found")
+        
+        # ✅ Filter images: all or one specific
+        page_images = page.get("images", [])
+        if image_id:
+            filtered_images = [img for img in page_images if img.get("image_id") == image_id]
+            if not filtered_images:
+                raise HTTPException(status_code=404, detail=f"Image with ID {image_id} not found")
+        else:
+            filtered_images = page_images
+
 
         images_info = []
-        for img in page.get("images", []):
+        # for img in page.get("images", []):
+        for img in filtered_images:
             image_hash = img.get("image_hash")
 
             if image_hash:
@@ -231,13 +243,16 @@ async def get_page_images(
                     if isinstance(thumbnail_b64, bytes)
                     else thumbnail_b64
                 ),
+                "image_base64": base64_data,
                 "position": img.get("position"),
                 "object_name": img.get("object_name") #object_name is store as part of image data
                 # "object_name": object_name # Include translated object name if available
             })
             # print(f"\nImage hash: {image_hash}, Object Name: {object_name}, position: {img.get('position')}")
-         # ✅ Sort images by position before returning
-        images_info.sort(key=lambda x: (x.get("position") is None, x.get("position")))
+         
+        # ✅ Sort images by position before returning only if entire page images are returned else no need to sort.
+        if not image_id: 
+            images_info.sort(key=lambda x: (x.get("position") is None, x.get("position")))
 
         return {
             "book_id": book_id,

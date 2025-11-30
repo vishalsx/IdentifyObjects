@@ -1,28 +1,21 @@
 from fastapi import HTTPException, BackgroundTasks, UploadFile
 from bson import ObjectId
-import hashlib
+
 from datetime import datetime, timezone
 import traceback
-import base64
-import io
-import os
-from PIL import Image
 from dotenv import load_dotenv
-from typing import List, Dict, Any
-from services.fileinfo import process_file_info
-from utils.common import compute_hash, insert_into_audit, get_permission_state_metadata, get_permission_state_translations, get_next_sequence, make_thumbnail_from_base64
-from storage.imagestore import store_image, retrieve_image
+from services.fileinfo import process_file_info, create_return_file_info
+from utils.common import compute_hash, insert_into_audit, get_permission_state_metadata, get_permission_state_translations, get_next_sequence
+from storage.imagestore import store_image
 from services.update_embeddings import update_object_embeddings
+
+
 load_dotenv()
 
 # ✅ Import MongoDB collections from central connection
 from db.connection import (
     objects_collection,
     translations_collection,
-    counters_collection,
-    permission_rules_collection,
-    roles_collection,
-    users_collection,
     languages_collection,
     MONGODB_DBNAME,
 )
@@ -213,16 +206,15 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
     obj_id = None
     translation_id = None
     
-    #Following code is for rest of the actions
-
     if not image:
      #try to ge the record based on translation id
         obj_id = ObjectId(common_data.get("object_id"))
         print("Looking for Objects presence..",obj_id)
         existing_object = await objects_collection.find_one( {"_id": obj_id} )
+
     else:                                                    #try to get the record based on image hash
         image_hash = await compute_hash(image)
-        print("\nPermission Action from frontend: ", permission_action)
+        # print("\nPermission Action from frontend: ", permission_action)
         # Check for existing object by image hash only. name can be duplicate
         existing_object = await objects_collection.find_one( {"image_hash": image_hash} )
        
@@ -247,7 +239,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                                 "metadata.updated_at": datetime.now(timezone.utc).isoformat(),
                                 "metadata.updated_by": common_data.get("userid", "anonymous"),
                         }
-                    print ("New Value:", new_value)
+                    # print ("New Value:", new_value)
                     audit_entry = await insert_into_audit(
                        objects_collection,
                        {"_id": obj_id},
@@ -382,7 +374,31 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 },
                 upsert=True
             )
-
+           
+            # Update the language Key in objects_collection if its a new language translation
+            # This would help in filtering objects by available languages
+            # update_one for objects collection is already org aware. Will modfy the objectd document if if global.
+            
+            try:
+                new_lang = lang_row.get("language", "Unknown").title()
+                language_key = f"object_votes_summary.language_scores.raw_net_votes.{new_lang}"
+                query_filter = {
+                    "_id": obj_id,
+                    language_key: {"$exists": False} 
+                }
+                update_data = {
+                    "$set": {
+                        language_key: 0
+                    }
+                }
+                key_update = await objects_collection.update_one(
+                    query_filter, # Use the conditional filter
+                    update_data,
+                    upsert=False 
+                )
+                print(f"\nConditional raw_net_votes update result: matched {key_update.matched_count}, modified {key_update.modified_count}")
+            except Exception as e:
+                print(f"Error conditionally updating raw_net_votes for object {obj_id}: {e}")
 
         except Exception as e:
             print(f"MongoDB insert error on translation collection: {e}") # Not sure why error.
@@ -468,37 +484,6 @@ def map_translation_collection(translation_coll: any):
 #         file_info_return.update(obj_coll.get("metadata", {}).get("updated_at", {})) #merging file info from metadata if any
         
 #     return {file_info_return}
-
-def create_return_file_info(obj_coll: dict) -> dict:
-    file_info = obj_coll.get("file_info", {}) or {}
-    metadata = obj_coll.get("metadata", {}) or {}
-
-    # Handle case where metadata is a list of dicts
-    if isinstance(metadata, list):
-        merged_metadata = {}
-        for m in metadata:
-            if isinstance(m, dict):
-                merged_metadata.update(m)
-        metadata = merged_metadata
-
-    # Extract values safely
-    new_filename = file_info.get("filename")
-    size = file_info.get("size")
-    dimensions = file_info.get("dimensions", "")
-    mime_type = file_info.get("mime_type")
-
-    response = {
-        "filename": new_filename,
-        "size": f"{size}" if size else None,
-        "dimensions": dimensions,
-        "mime_type": mime_type,
-        "created_by": metadata.get("created_by"),
-        "created_at": metadata.get("created_at"),
-        "updated_by": metadata.get("updated_by"),
-        "updated_at": metadata.get("updated_at"),
-    }
-
-    return response
 
 
 
@@ -615,173 +600,5 @@ async def get_language_details(language: str):
         return lang_doc
     else:
         return {"error":f"Specified language not found {language}"} 
-
-
-async def get_recent_translations(userid: str):
-    """
-    Return top 3 active translations for a user, joined with their objects.
-    """
-
-    # 1. Extract roles assigned to this user
-    user_doc = await users_collection.find_one({"username": userid}, {"roles": 1})
-    if not user_doc or "roles" not in user_doc:
-        return []
-
-    roles = user_doc["roles"]
-
-    # 2. Get permissions from roles
-    role_docs = roles_collection.find({"_id": {"$in": roles}}, {"permissions": 1})
-    user_permissions: List[str] = []
-    async for role_doc in role_docs:
-        user_permissions.extend(role_doc.get("permissions", []))
-
-    # 3. For each permission, fetch its rules and collect "from" states
-    allowed_states: set[str] = set()
-    rules_cursor = permission_rules_collection.find(
-        {"_id": {"$in": user_permissions}, "transitionType": "StateChange"}
-    )
-
-    async for rule in rules_cursor:
-        transitions = rule.get("stateTransitions", {}).get("language", [])
-        for t in transitions:
-            if "from" in t:
-                allowed_states.add(t["from"])
-            if "to" in t:
-                allowed_states.add(t["to"])    
-
-    print(f"Allowed states for {userid}: {allowed_states}")
-
-    # # 4. Find top 3 active translations for this user, where status is in allowed states
-    # query = {
-    #     "$and": [
-    #         {"translation_status": {"$in": list(allowed_states)}},
-    #         {"$or": [{"metadata.created_by": userid}, {"audit_trail.user_id": userid}]},
-    #     ]
-    # }
-
-    # translations_cursor = translations_collection.find(query).sort("updated_at", -1).limit(3)
-    # translations = [doc async for doc in translations_cursor]
-
-    # 4. Aggregation pipeline for per-translation last_activity
-    pipeline = [
-        {
-            "$match": {
-                "translation_status": {"$in": list(allowed_states)},
-                "$or": [
-                    {"metadata.created_by": userid},
-                    {"audit_trail.user_id": userid}
-                ]
-            }
-        },
-        {
-            "$addFields": {
-                "created_ts": {
-                    "$cond": [
-                        {"$ifNull": ["$created_at", False]},
-                        {"$toDate": "$created_at"},
-                        None
-                    ]
-                },
-                "audit_ts_array": {
-                    "$map": {
-                        "input": {"$ifNull": ["$audit_trail", []]},
-                        "as": "a",
-                        "in": {
-                            "$cond": [
-                                {"$ifNull": ["$$a.timestamp", False]},
-                                {"$toDate": "$$a.timestamp"},
-                                None
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        {
-            "$addFields": {
-                "last_audit_ts": {
-                    "$cond": [
-                        {"$gt": [{"$size": {"$ifNull": ["$audit_ts_array", []]}}, 0]},
-                        {"$max": "$audit_ts_array"},
-                        None
-                    ]
-                }
-            }
-        },
-        {
-            "$addFields": {
-                "last_activity": {
-                    "$cond": {
-                        "if": {
-                            "$and": [
-                                {"$ifNull": ["$last_audit_ts", False]},
-                                {"$ifNull": ["$created_ts", False]}
-                            ]
-                        },
-                        "then": {
-                            "$cond": [
-                                {"$gt": ["$last_audit_ts", "$created_ts"]},
-                                "$last_audit_ts",
-                                "$created_ts"
-                            ]
-                        },
-                        "else": {"$ifNull": ["$last_audit_ts", "$created_ts"]}
-                    }
-                }
-            }
-        },
-        {"$sort": {"last_activity": -1}},   # newest first
-        {"$limit": 3}                       # only top 3
-    ]
-
-    translations = await translations_collection.aggregate(pipeline).to_list(length=3)
-    print("\nThumbnail translations constructed.. ")
-    
-    results = []
-
-    for t in translations:
-        obj_id = t.get("object_id")
-        if not obj_id:
-            continue
-        
-        # 5. Fetch corresponding object
-        
-        obj_doc = await objects_collection.find_one(
-            # {"_id": obj_id}, {"image_hash": 1, "image_base64.": 1, "image_name":1} 
-            {"_id": obj_id}, {"image_hash": 1, "image_store":1, "image_name":1, "file_info":1,"metadata":1} 
-        )
-        if not obj_doc:
-            continue
-        
-        # Calculate image_base64 from the store now.
-        image_store = obj_doc.get("image_store", "")
-        image_base64 = await retrieve_image (image_store)
-        
-
-        # thumbnail_b64 = make_thumbnail_from_base64(obj_doc.get("image_base64", ""))
-        thumbnail_b64 = make_thumbnail_from_base64(image_base64)
-
-        results.append({
-            "object": {
-                "image_hash": obj_doc.get("image_hash"),
-                "image_base64": image_base64 or "",
-                "thumbnail": (
-                    thumbnail_b64.decode("utf-8") if isinstance(thumbnail_b64, bytes) 
-                    else (thumbnail_b64 or "")
-                ),
-            },
-            "translation": {
-                "translation_id": str(t["_id"]),
-                "requested_language": t.get("requested_language"),
-                "translation_status": t.get("translation_status"),
-            },
-            "permissions": list(user_permissions or []),
-            "file_info": create_return_file_info(obj_doc) or {},
-        })
-
-    print(f"\n Thumbnail Structure for frist object\nImage hash: {results[0]['object']['image_hash']}\nImage Base64: {results[0]['object']['image_base64'][:10]}...\nThumbnail: {results[0]['object']['thumbnail'][:10]}...\nTranslation ID: {results[0]['translation']['translation_id']}\nRequested Language: {results[0]['translation']['requested_language']}\nTranslation Status: {results[0]['translation']['translation_status']}\nPermissions: {results[0]['permissions']}\nFile Info: {results[0]['file_info']}\n") if results else print("No results found.")
-    return results
-
-
 
 

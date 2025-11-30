@@ -4,7 +4,7 @@ import jwt
 import os
 from dotenv import load_dotenv
 from jose import JWTError, jwt
-
+from typing import Optional, Dict, Any
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -34,6 +34,12 @@ def get_current_user_id() -> str | None:
     user = _current_user.get()
     return user.get("user_id") if user else None
 
+
+def get_organisation_id() -> str | None:
+    """Retrieve organisation Id if it exists for the user"""
+    user = _current_user.get()
+    org_id = user.get("organisation_id")
+    return org_id if user and org_id else None
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -66,13 +72,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
     if not user_role:
         raise HTTPException(status_code=403, detail="No role assigned to this user")
+    
+    tokens_info = {
+        "user_id": user_id,
+        "role": user_role,
+    }
 
-    user_info = {"user_id": user_id, "role": user_role}
+    organisation_id = payload.get("organisation_id") 
+    if organisation_id: # Add organisation_id if present
+        tokens_info["organisation_id"] = organisation_id
+
+    # user_info = {"user_id": user_id, "role": user_role}
+    user_info = tokens_info
 
     # Store globally in context variable for this request
     set_current_user(user_info)
     
-    return {
-        "user_id": user_id,
-        "role": user_role
-    }
+    # return {
+    #     "user_id": user_id,
+    #     "role": user_role
+    # }
+    return user_info
+

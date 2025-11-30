@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from services.userauth import get_current_user
-from services.db_crud import mark_translation_doc_unlocked, get_recent_translations
+from services.db_crud import mark_translation_doc_unlocked
+from services.recent_translations import get_recent_translations
 
 router = APIRouter(prefix="/translations", tags=["skip-translations"])
 

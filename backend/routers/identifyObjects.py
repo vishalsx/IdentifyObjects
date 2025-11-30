@@ -20,8 +20,9 @@ async def identify_object(
     current_user: dict = Depends(get_current_user)
 ):
 
-    # --- Case 1: image has provided. hash takes priority ---
+    # --- Case 1: image hash provided. hash takes priority ---
     if image_hash:
+        print ("\nImage hash provided:", image_hash)
         doc = await objects_collection.find_one({"image_hash": image_hash})
         if not doc:
             raise HTTPException(status_code=404, detail="No object found for given image_hash")
@@ -37,7 +38,7 @@ async def identify_object(
 
     # --- Case 2: Only image provided ---
     elif image:
-
+        print("\nImage file provided:", image.filename)
         if not image.content_type or not image.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="File must be an image.")
         image_base64 = await image_to_base64(image) 

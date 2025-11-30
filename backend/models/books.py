@@ -1,8 +1,9 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime,timezone
 from pydantic_core import core_schema
+from services.userauth import get_current_user_id
 
 
 # ---------- Custom ObjectId ----------
@@ -75,9 +76,12 @@ class Book(BaseModel):
     chapter_count: int = Field(0, description="Total number of chapters in the book")
     page_count: int = Field(0, description="Total number of pages across all chapters")
     image_count: int = Field(0, description="Total number of images across all pages")
+    book_status: str = Field("Draft", description="Status of the book: Draft/Released/Verified/Approved")
+    # created_by: Optional[str] = Field(None, description="User ID of the creator")
+    created_by: Optional[str] = Field(get_current_user_id(), description="User ID of the creator")
+    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
     model_config = {
         "arbitrary_types_allowed": True,

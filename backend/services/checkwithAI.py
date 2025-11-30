@@ -4,13 +4,13 @@ import io
 import base64
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.schema import HumanMessage, SystemMessage
-
+from langchain_core.exceptions import OutputParserException
 import json
 import re
 from services.db_crud import get_existing_data_imagehash, get_language_details
 from services.fileinfo import process_file_info
-
-
+from models.analysis_schema import AnalysisResult
+from services.prompt_orchestrator import orchestrate_prompt
 from dotenv import load_dotenv
 import os
 
@@ -19,86 +19,88 @@ API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable not set")
 os.environ["GOOGLE_API_KEY"] = API_KEY
+temperature = os.getenv("DEFAULT_TEMPERATURE", "0.2")
 
-
-SYSTEM_PROMPT = """
-You are a visual AI assistant expert in identifying object details in different languages.
-
-You will always receive input in the following format inside the HumanMessage:
-{
-  "target_language": "<language name>",
-  "language_script": "<writing script>"
-}
-
-You will also receive an image encoded as base64.
-
----
-
-Your core tasks are:
-
-1. Identify the **primary object** in the image. If multiple objects exist, choose the most distinctive and clear object in the foreground.  
-
-2. Identify the **exact name of the object in English** if it is a plant, flower, natural or man-made object (e.g., "Palm", "Grand Canyon", "Rose", "Table", "Chair").  
-
-3. Identify the **object name in the target language** (e.g., in Hindi "सेब", in Spanish "manzana", in Kokborok "Seb").  
-   - Do not use classifiers ("a", "an", "the") or adjectives.  
-   - Always write it in the `language_script` provided.  
-
-4. Generate a **description** (25–75 words) in the `target_language`.  
-   - Cover origin, usage, properties, significance.  
-   - End with a trivia or fun fact from the demographic region of that language.  
-   - Always write it in the `language_script`.  
-
-5. Generate a **hint** in the `target_language` for a guessing game.  
-   - Do not reveal the object name.  
-   - Use riddles, proverbs, or cultural sayings.  
-   - Write it in the `language_script`.  
-
-6. Generate a **short hint** (10–15 words) in the `target_language`.  
-   - Same rules as the longer hint.  
-   - Write it in the `language_script`.  
-
-7. Generate **tags in English** (list of words). Example for apple: `["food", "fruit", "red", "healthy", "snack"]`.  
-
-8. Generate a **category in English** (e.g., "plant", "flower", "animal", "building", "vehicle", "food", "clothing", "tool", "furniture", "other").  
-
-9. Generate a **field of study in English** (e.g., "botany", "zoology", "architecture", "culinary arts", "engineering", "art history").  
-
-10. Generate the **age appropriateness in English**: "all ages", "kids", "teens", "adults", "seniors".  
-
----
-
-Important Guardrails:
-- If the image contains a known celebrity, political leader, or divine/religious figure → only provide **neutral, respectful details**. No opinions or negative commentary.  
-- If the image depicts inappropriate/explicit content → respond with `"Inappropriate content."` for all fields.  
-- Never include politically or religiously sensitive or controversial content.  
-- If you find any vilations in the guardrail rule, raise this error in the error JSON tag
----
-
-Output strictly in **valid JSON only** (no markdown, no comments).  
-
-Output JSON format:
-{
-  "object_name_en": "<object name in English>",
-  "object_name": "<object name in target_language using language_script>",
-  "translated_to": "<target_language>",
-  "object_description": "<description in target_language using language_script>",
-  "object_hint": "<hint in target_language using language_script>",
-  "object_short_hint": "<short hint in target_language using language_script>",
-  "tags": ["<tag1>", "<tag2>", "..."],
-  "object_category": "<category in English>",
-  "field_of_study": "<field of study in English>",
-  "age_appropriate": "<all ages | kids | teens | adults | seniors>"
-  "error:" "<Inappropriate content detected. Can't be processed..>"
-}
-"""
 
 def get_gemini_model_vision():
-    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=temperature, max_retries=3, timeout=120)
 
 
 async def identify_and_translate(image_base64: str, imagehash:str, image_filename: str,target_language: str) -> dict:
     try:
+        DEFAULT_AGENT = "A Visual AI assistant"
+
+        SYSTEM_PROMPT = """
+        You are {DEFAULT_AGENT}, expert in identifying object details in different languages.
+        You will always receive input in the following format inside the HumanMessage:
+        {
+        "target_language": "<language name>",
+        "language_script": "<writing script>"
+        }
+
+        You will also receive an image encoded as base64.
+
+        ---
+
+        Your core tasks are:
+
+        1. Identify the **primary object** in the image. If multiple objects exist, choose the most distinctive and clear object in the foreground.  
+
+        2. Identify the **exact name of the object in English** if it is a plant, flower, natural or man-made object (e.g., "Palm", "Grand Canyon", "Rose", "Table", "Chair").  
+
+        3. Identify the **object name in the target language** (e.g., in Hindi "सेब", in Spanish "manzana", in Kokborok "Seb").  
+        - Do not use classifiers ("a", "an", "the") or adjectives.  
+        - Always write it in the `language_script` provided.  
+
+        4. Generate a **description** (25–75 words) in the `target_language`.  
+        - Cover origin, usage, properties, significance.  
+        - End with a trivia or fun fact from the demographic region of that language.  
+        - Always write it in the `language_script`.  
+
+        5. Generate a **hint** in the `target_language` for a guessing game.  
+        - Do not reveal the object name.  
+        - Use riddles, proverbs, or cultural sayings.  
+        - Write it in the `language_script`.  
+
+        6. Generate a **short hint** (10–15 words) in the `target_language`.  
+        - Same rules as the longer hint.  
+        - Write it in the `language_script`.  
+
+        7. Generate **tags in English** (list of words). Example for apple: `["food", "fruit", "red", "healthy", "snack"]`.  
+
+        8. Generate a **category in English** (e.g., "plant", "flower", "animal", "building", "vehicle", "food", "clothing", "tool", "furniture", "other").  
+
+        9. Generate a **field of study in English** (e.g., "botany", "zoology", "architecture", "culinary arts", "engineering", "art history").  
+
+        10. Generate the **age appropriateness in English**: "all ages", "kids", "teens", "adults", "seniors".  
+
+        ---
+
+        Important Guardrails:
+        - If the image contains a known celebrity, political leader, or divine/religious figure → only provide **neutral, respectful details**. No opinions or negative commentary.  
+        - If the image depicts inappropriate/explicit content → respond with `"Inappropriate content."` for all fields.  
+        - Never include politically or religiously sensitive or controversial content.  
+        - If you find any violations in the guardrail rule, raise this error in the error JSON tag
+        ---
+
+        Output strictly in **valid JSON only** (no markdown, no comments).  
+
+        Output JSON format:
+        {
+        "object_name_en": "<object name in English>",
+        "object_name": "<object name in target_language using language_script>",
+        "translated_to": "<target_language>",
+        "object_description": "<description in target_language using language_script>",
+        "object_hint": "<hint in target_language using language_script>",
+        "object_short_hint": "<short hint in target_language using language_script>",
+        "tags": ["<tag1>", "<tag2>", "..."],
+        "object_category": "<category in English>",
+        "field_of_study": "<field of study in English>",
+        "age_appropriate": "<all ages | kids | teens | adults | seniors>"
+        "error:" "<Inappropriate content detected. Can't be processed..>"
+        }
+        """
+
         result = {}
         image_found_in_database = True
         existing_result = None
@@ -110,7 +112,10 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
             pass #use default scripts if langage not defined in languages collection
         else:
             language_script = language_details.get("script", "")
-            print (f"\nLanguage Script found: {language_script}")
+        
+
+        SYSTEM_PROMPT = await orchestrate_prompt(SYSTEM_PROMPT, DEFAULT_AGENT)
+        # print("\nFinal SYSTEM PROMPT used:\n", SYSTEM_PROMPT)
 
         try:
             existing_result = await get_existing_data_imagehash(imagehash, target_language)
@@ -138,31 +143,43 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
             image_found_in_database = False  # ✅ ensure AI still runs
 
       
-        print("Translations found:", image_found_in_database)
+        print("\n🟢Translations found:", image_found_in_database)
 
         if not image_found_in_database:
         # AI invoked if the image wasnt found in our own database
-            system_prompt = SYSTEM_PROMPT
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=[
-                    {
-                            "type": "text",
-                            "text": json.dumps({
-                                "target_language": target_language,
-                                "language_script": language_script
-                            })
-                        },
+            # print("\nFINAL SYSTEM PROMPT:", SYSTEM_PROMPT)
+            try:
+                system_prompt = SYSTEM_PROMPT
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=[
                         {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/png;base64,{image_base64}"}
-                        }
-                ])
-            ]
+                                "type": "text",
+                                "text": json.dumps({
+                                    "target_language": target_language,
+                                    "language_script": language_script
+                                })
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{image_base64}"}
+                            }
+                    ])
+                ]
+            except OutputParserException as e:
+                # (e.g., model returned non-JSON despite the config)
+                print(f"\nOutputParserException (Model failed to adhere to schema): {str(e)}")    
 
-            model = get_gemini_model_vision()
-            #response = await model.invoke(messages)
-            response = await model.ainvoke(messages) #Changed to Async invoke
+            try:
+                model = get_gemini_model_vision()
+                response = await model.ainvoke(messages) #Changed to Async invoke
+
+
+                # print("\nRaw LLM Response:", response)
+            except OutputParserException as e:
+                # This catches failures specifically from the structured output parser
+                # (e.g., model returned non-JSON despite the config)
+                print(f"\nOutputParserException (Model failed to adhere to schema): {str(e)} and provided following resposne: {response}")    
 
     
             # Attempt to parse JSON output
@@ -170,18 +187,18 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
                 raw_output = response.content.strip()
                 cleaned_output = re.sub(r"^```(json)?|```$", "", raw_output.strip(), flags=re.MULTILINE).strip()
                 result = json.loads(cleaned_output) 
-                
-                if "error" in result:
-                    return {"error": "Inappropriate content uploaded.."}
+                # if "error" in result:
+                #     return {"error": "Inappropriate content uploaded.."}
                     
-                    
+                if result.get("error"): # This is robust and checks if the value is truthy (non-empty string)
+                    return {"error": result.get("error")}
+
+                # If result["error"] is '', the condition is False, and processing continues.
         
                 #insert the state of database match for Object and Translation
                 print(f"AI Output for {target_language}:", result)
-                # print("\nAppending Object:", object_found)
-                # print("\nAppending translation",translation_found)
-
-               #Overwrite common data fields if already available in database. Dont use AI fields in this case for commondata only.
+                
+                #Overwrite common data fields if already available in database. Dont use AI fields in this case for commondata only.
                 #This cover the case when only object exists and no translation is available. will overwrite only commondata
                 if object_found is True and existing_result and translation_found is False:
                     for field in existing_result:

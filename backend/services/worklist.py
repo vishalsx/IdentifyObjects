@@ -4,22 +4,17 @@ from pydantic import BaseModel
 from typing import List, Optional
 from pymongo import ReturnDocument
 from bson import ObjectId
-from services.db_crud import map_object_collection, map_translation_collection,create_return_file_info
+from services.db_crud import map_object_collection, map_translation_collection
 from db.connection import db  # centralized DB connection
-from services.fileinfo import process_file_info
-from services.userauth import get_current_user
+from services.fileinfo import create_return_file_info
 from storage.imagestore import retrieve_image
 
 
 from db.connection import (
     objects_collection,
     translations_collection,
-    counters_collection,
     permission_rules_collection,
     roles_collection,
-    users_collection,
-    languages_collection,
-    MONGODB_DBNAME,
 )
 router = APIRouter()
 
@@ -93,10 +88,10 @@ async def get_workitem_for_user(current_user: dict, languages: List[str] = None)
             return_document=ReturnDocument.AFTER,
         )
 
-        print(f"Translation found for language '{lang}':", translation)
-
         if not translation:
             continue
+        
+        print(f"Translation found for language '{lang}':", translation)
 
         obj = await objects_collection.find_one({"_id": translation["object_id"]})
         if not obj:

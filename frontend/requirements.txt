@@ -1,5 +1,0 @@
-streamlit==1.36.0
-requests==2.32.3
-pillow==10.4.0
-#pillow-heif==0.17.0
-python-dotenv==1.0.1

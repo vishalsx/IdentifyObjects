@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 import logging
 import os
@@ -220,7 +220,7 @@ The story should be inspiring, vivid, and make children smile — while teaching
             object_names=object_names,
             story=story_text,
             moral=moral,
-            created_at=datetime.utcnow().isoformat()
+            created_at= datetime.now(timezone.utc).isoformat()
         )
 
         print("StoryResponse JSON:", story_response.model_dump())  # Pretty readable in logs

@@ -5,11 +5,15 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from typing import List
 import jwt
-import datetime
+from datetime import datetime, timedelta, timezone
+
+
 from dotenv import load_dotenv
 import os
 import hashlib
 from models.loginauth import LoginResponse, CreateUserRequest, CreateUserResponse, pwd_context
+from services.validate_user_org import validate_user_organisation
+
 
 # --- IMPORT CENTRALIZED DB CONNECTION ---
 from db.connection import db  # use db directly
@@ -122,10 +126,17 @@ async def get_user_permissions(username: str) -> dict:
 
 
 
+# def create_access_token(data: dict):
+#     to_encode = data.copy()
+#     to_encode.update({"exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)})
+#     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
 def create_access_token(data: dict):
     to_encode = data.copy()
-    to_encode.update({"exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)})
+    to_encode.update({"exp": datetime.now(timezone.utc) + timedelta(hours=24)})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
 
 # --- CREATE USER ENDPOINT ---
 @router.post("/create-user", response_model=CreateUserResponse)
@@ -160,7 +171,7 @@ async def create_user(user: CreateUserRequest):
         "roles": user.roles,   # ✅ now stored as list
         "languages_allowed": user.languages_allowed,
         "country": user.country,
-        "created_at": datetime.datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "is_active": True
     }
 
@@ -194,9 +205,14 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         roles = [roles]  # fallback for old users
     
     # Create access token
-    access_token = create_access_token(
-        {"sub": user["username"], "roles": [user["roles"]]}
-    )
+    payload = {
+        "sub": user["username"],
+        "roles": [user["roles"]],
+    }
+    if user.get("organisation_id"):
+        payload["organisation_id"] = user["organisation_id"]
+
+    access_token = create_access_token(payload) 
 
     # # Fetch permissions for this user based on the role assigned
     # permissions = await get_user_permissions(user["username"])
@@ -204,24 +220,21 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     # print("User roles:", user["roles"])
     permission_rules = await get_user_permissions(user["username"])
     print ("\nPermission rules for user:", user["username"], permission_rules)
-
-    return LoginResponse(
+    
+    #check if user belongs to an organisation, languages allowed will come from organisation settings.
+    org_data = await validate_user_organisation(user)
+    login_response = LoginResponse(
         access_token=access_token,
         token_type="bearer",
         username=user["username"],
         roles=roles,
-        permissions=list(permission_rules.keys()),   # just IDs
-        languages_allowed=user.get("languages_allowed", []),
-        permission_rules=permission_rules            # ✅ full mapping
+        permissions=list(permission_rules.keys()),
+        languages_allowed=org_data.get("languages_allowed", []),
+        permission_rules=permission_rules,
+        org_name=org_data.get("org_name"),
+        logo_url=org_data.get("logo_url"),
+        org_id=org_data.get("org_id")
     )
 
 
-
-    # return LoginResponse(
-    #     access_token=access_token,
-    #     token_type="bearer",  # ✅ add this
-    #     username=user["username"],
-    #     roles=roles,
-    #     permissions=permissions,
-    #     languages_allowed=user.get("languages_allowed", [])
-    # )
+    return login_response

@@ -4,7 +4,7 @@ import io
 from fastapi import UploadFile, HTTPException, BackgroundTasks
 
 import base64
-from services.userauth import get_current_user_id
+from services.userauth import get_current_user_id, get_organisation_id
 
 from datetime import datetime, timezone
 import io
@@ -82,13 +82,20 @@ async def store_image(image_file: UploadFile, background_tasks: BackgroundTasks)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to compress image: {str(e)}")
 
+    # Include org_id in the path after images folder
+    org_id = None
+    org_id = get_organisation_id()
     # Step 4: Build object key (date-based path)
+    
     try:
         now = datetime.now(timezone.utc)
         year, month = now.strftime("%Y"), now.strftime("%m")
         ts_prefix = now.strftime("%Y%m%d%H%M")
         filename = f"{user_id}-{ts_prefix}-{seqno}.jpeg"
-        object_key = f"images/{year}/{month}/{filename}"
+        if org_id:
+            object_key = f"images/{org_id}/{year}/{month}/{filename}"
+        else:
+            object_key = f"images/PUBLIC/{year}/{month}/{filename}"
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to build object key: {str(e)}")
 

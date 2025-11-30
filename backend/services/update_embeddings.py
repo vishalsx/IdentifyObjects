@@ -2,15 +2,15 @@ import logging
 import os
 from bson import ObjectId
 from dotenv import load_dotenv
-from pymongo import MongoClient
+# from pymongo import MongoClient
 import google.generativeai as genai
 from db.connection import objects_collection, translations_collection
 # ----------------------------------------
 # 🔧 Configuration
 # ----------------------------------------
 load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "your_db_name")
+# MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+# DB_NAME = os.getenv("DB_NAME", "your_db_name")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
 
@@ -20,45 +20,6 @@ logging.basicConfig(level=logging.INFO)
 
 # Configure Gemini client
 genai.configure(api_key=GEMINI_API_KEY)
-
-# # MongoDB client
-# mongo_client = MongoClient(MONGO_URI)
-# db = mongo_client[DB_NAME]
-# objects_collection = db["objects"]
-# translations_collection = db["translations"]
-
-# ----------------------------------------
-# 🧩 Helper functions
-# ----------------------------------------
-
-# def build_embedding_text(obj: dict, translations: any) -> str:
-#     """Construct text for embedding from object fields."""
-#     parts = []
-
-#     # parts.extend = ([
-#     #     obj.get("object_name_en", ""),
-#     #     obj.get("metadata", {}).get("object_category", ""),
-#     #     obj.get("metadata", {}).get("field_of_study", ""),
-#     #     " ".join(obj.get("metadata", {}).get("tags", []))
-#     # ])
-#     parts.extend([  # ✅ Use () not =
-#         obj.get("object_name_en", ""),
-#         obj.get("metadata", {}).get("object_category", ""),
-#         obj.get("metadata", {}).get("field_of_study", ""),
-#         " ".join(obj.get("metadata", {}).get("tags", []))
-#     ])
-
-#  # Add translations (object_name_translated, tags_translated, etc.)
-#     for t in translations:
-#         translated_name = t.get("object_name", "")
-#         # translated_tags = t.get("tags_translated", [])
-#         if translated_name:
-#             parts.append(translated_name)
-#         # if translated_tags:
-#         #     parts.extend(translated_tags)
-
-#     combined_text = " ".join(filter(None, parts)).strip()
-#     return combined_text
 
 def build_embedding_text(obj: dict, translations: list) -> str:
     """Construct text for embedding from object fields."""
@@ -73,10 +34,11 @@ def build_embedding_text(obj: dict, translations: list) -> str:
     ])
 
     # Add translations (object_name_translated, tags_translated, etc.)
-    for t in translations:
-        translated_name = t.get("object_name", "")
-        if translated_name:
-            parts.append(translated_name)
+    if translations:
+        for t in translations:
+            translated_name = t.get("object_name", "")
+            if translated_name:
+                parts.append(translated_name)
 
     # Filter out empty strings and join
     combined_text = " ".join(filter(None, parts)).strip()
@@ -102,7 +64,6 @@ def get_text_embedding(text: str):
         logger.error(f"❌ Embedding generation failed: {e}")
         return None
 
-
 # ----------------------------------------
 # 🚀 Background Task
 # ----------------------------------------
@@ -113,18 +74,34 @@ async def update_object_embeddings(object_id: ObjectId ):
     Trigger this after creation or update of an object.
     """
     try:
-        obj = await objects_collection.find_one({"_id": object_id})
+        obj = await objects_collection.find_one(
+            {
+                "_id": object_id,
+                "image_status": "Approved"
+            },
+            {
+                "object_name_en": 1,
+                "metadata": 1
+            }
+        )
         if not obj:
             logger.warning(f"⚠️ Object {object_id} not found for embedding update.")
             return
         # --- Fetch translations for this object ---
-        translation = await translations_collection.find(
-            {"object_id": object_id}, 
+        translation = translations_collection.find(
+            {
+                "object_id": object_id,
+                "translation_status": "Approved"
+            }, 
             {"object_name": 1}
-        ).to_list(length=None)
+        )
+        translation = await translation.to_list(length=None)
+
+        if not translation:
+            logger.warning(f"⚠️ No approved translations found for Object {object_id}. Adding only ")
 
 
-
+        
         embedding_text = build_embedding_text(obj, translation)
         if not embedding_text:
             logger.warning(f"⚠️ Object {object_id} has no text to embed.")
@@ -135,7 +112,7 @@ async def update_object_embeddings(object_id: ObjectId ):
             logger.warning(f"⚠️ Failed to generate embedding for {object_id}.")
             return
 
-        objects_collection.update_one(
+        await objects_collection.update_one(
             {"_id": object_id},
             {"$set": {
                 "embedding_text": embedding_text,

@@ -17,10 +17,11 @@ class LoginResponse(BaseModel):
     username: str
     roles: List[str]
     permissions: List[str]
-    languages_allowed: List[str]
+    languages_allowed: List[str] #this shoudl come from the licensed organisation automatically.
     permission_rules: Dict[str, Any]  # ✅ detailed permission rules
-    organisation_id: Optional[str] = None
-    bypass_approvals: Optional[bool] = False
+    org_name: Optional[str] = None
+    logo_url: Optional[str] = None
+    org_id: Optional[str] = None
 
 class CreateUserRequest(BaseModel):
     username: str
@@ -30,6 +31,7 @@ class CreateUserRequest(BaseModel):
     roles: List[str]   # ✅ now always an array
     languages_allowed: List[str]
     country: Optional[str] = None
+    organisation_id: Optional[str] = None
 
 class CreateUserResponse(BaseModel):
     message: str

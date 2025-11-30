@@ -41,7 +41,6 @@ async def update_object(
 
         if not isinstance(language_data, list) or not language_data:
             raise HTTPException(status_code=400, detail="language_attributes must be a non-empty list")
-
         if permission_action not in ["ApproveText", "RejectText"]:
             # image_base64 = await image_to_base64(image) if image else None
             image_filename = image.filename if image else None

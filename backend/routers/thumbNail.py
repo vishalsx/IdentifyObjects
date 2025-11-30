@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Form, HTTPException
 from services.userauth import get_current_user, get_current_user_id
-from services.db_crud import get_recent_translations
+from services.recent_translations import get_recent_translations
 
 router = APIRouter(
     prefix="/thumbnail",

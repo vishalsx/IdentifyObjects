@@ -15,7 +15,8 @@ from routers import (
     getImagePool,
     createBook,
     searchBook,
-    createStory
+    createStory,
+    createprompt
 )
 
 from routers.login import router as login_router
@@ -59,7 +60,7 @@ app.include_router(getImagePool.router)
 app.include_router(createBook.router)
 app.include_router(searchBook.router)
 app.include_router(createStory.router)
-
+app.include_router(createprompt.router)
 
 @app.get("/")
 def read_root():
