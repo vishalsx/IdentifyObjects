@@ -100,7 +100,6 @@ async def update_status_only(common_data: dict, language_row: dict, permission_a
     new_metadata_state = None
     new_translation_state = None
     translation_coll = None
-    object_response = None
     obj_id = None
     try:
         # --- TRANSLATION STATUS UPDATE ---
@@ -145,7 +144,8 @@ async def update_status_only(common_data: dict, language_row: dict, permission_a
 
         # --- OBJECT STATUS UPDATE / REJECTION HANDLING ---
         if permission_action == 'RejectText':
-            obj_id = await manage_rejection(common_data)
+            # obj_id = await manage_rejection(common_data)
+            pass
             
         else:
             object_coll = await objects_collection.find_one(
@@ -228,7 +228,7 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
             new_metadata_state = await get_permission_state_metadata (existing_object.get("image_status"), permission_action )
             if new_metadata_state is not None: # Do not update metadata if new transition is None
                 if lang_row.get("language", "Unknown").lower() == "english": #update the entire Metadata if send for English, else just update the status
-
+                    print("\n🔴🔴🔴Updating full Object metadata as the language is English.", common_data)
                     new_value = {
                                 "object_name_en": (common_data.get("object_name_en", existing_object.get("object_name_en", ""))).title(),
                                 "image_status": new_metadata_state,
@@ -309,7 +309,8 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
                 # "image_base64": image_base64, #this needs to be to saved through storage
                 "image_store" : image_store,
                 "object_name_en": (common_data.get("object_name_en", "")).title(),
-                "image_status": await get_permission_state_metadata (common_data.get("image_status"), permission_action ),
+                # "image_status": await get_permission_state_metadata (common_data.get("image_status"), permission_action ),
+                "image_status": await get_permission_state_metadata (None, permission_action ),# Since its the first time passing None as current state
                
                 "metadata": {
                     "tags":common_data.get("tags", []),
@@ -340,12 +341,27 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
         try:
             # In any case upsert the translation data whether exists or doesn't
             # assumption is that obj_id of objects collection is always present at this stage.
+            
+            # Getting real translation status from the database rather than relying on what is passed from frontend
+            tc = await translations_collection.find_one(
+                { "object_id": obj_id, "requested_language": (lang_row.get("language", "Unknown")).title()},
+                {
+                    "_id": 1,
+                    "translation_status": 1
+                }
+            )
+            if tc:
+                current_translation_status = tc.get("translation_status")
+            else:
+                current_translation_status = None
+            
             new_value = {
                     "object_name": lang_row.get("object_name", ""),
                     "object_description": lang_row.get("object_description", ""),
                     "object_hint": lang_row.get("object_hint", ""),
                     "object_short_hint": lang_row.get("object_short_hint", ""),
-                    "translation_status": await get_permission_state_translations (lang_row.get("translation_status"), permission_action ), #will be Null if new
+                    #"translation_status": await get_permission_state_translations (lang_row.get("translation_status"), permission_action ), #will be Null if new
+                    "translation_status": await get_permission_state_translations (current_translation_status, permission_action ),    #use current status from DB to get new status
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                     "updated_by": common_data.get("userid", "anonymous"),
                     "locked_by": None,
@@ -418,8 +434,6 @@ async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_r
     {"_id": 1}
     )
     translation_id = existing_doc["_id"] if existing_doc else None  
-    print("Inserted find_one translation id:", translation_id)
-
 
     # Update vector embedding of Object data alongwith translations data for multilingual vector search
     try: # Trigger background task to update embedding

@@ -26,7 +26,7 @@ def get_gemini_model_vision():
     return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=temperature, max_retries=3, timeout=120)
 
 
-async def identify_and_translate(image_base64: str, imagehash:str, image_filename: str,target_language: str) -> dict:
+async def identify_and_translate(image_base64: str, imagehash: str, image_filename: str, target_language: str, additional_context: str = None) -> dict:
     try:
         DEFAULT_AGENT = "A Visual AI assistant"
 
@@ -35,7 +35,9 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
         You will always receive input in the following format inside the HumanMessage:
         {
         "target_language": "<language name>",
-        "language_script": "<writing script>"
+        "language_script": "<writing script>",
+        "additional_context": "<Must consider optional additional context about the object or any related information in your response. If no additional context is provided or if this tag is blank or NULL then ignore this field.>"
+
         }
 
         You will also receive an image encoded as base64.
@@ -157,7 +159,8 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
                                 "type": "text",
                                 "text": json.dumps({
                                     "target_language": target_language,
-                                    "language_script": language_script
+                                    "language_script": language_script,
+                                    "additional_context": additional_context or ""
                                 })
                             },
                             {
@@ -180,6 +183,8 @@ async def identify_and_translate(image_base64: str, imagehash:str, image_filenam
                 # This catches failures specifically from the structured output parser
                 # (e.g., model returned non-JSON despite the config)
                 print(f"\nOutputParserException (Model failed to adhere to schema): {str(e)} and provided following resposne: {response}")    
+
+
 
     
             # Attempt to parse JSON output

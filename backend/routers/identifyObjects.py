@@ -12,11 +12,19 @@ from storage.imagestore import retrieve_image
 router = APIRouter(prefix="/identify", tags=["identify"])
 
   
+# @router.post("/object")
+# async def identify_object(
+#     image: Optional[UploadFile] = File(None),   # ✅ optional file
+#     image_hash: Optional[str] = Form(None),     # ✅ optional hash
+#     language: str = Form(...),
+#     current_user: dict = Depends(get_current_user)
+# ):
 @router.post("/object")
 async def identify_object(
-    image: Optional[UploadFile] = File(None),   # ✅ optional file
-    image_hash: Optional[str] = Form(None),     # ✅ optional hash
+    image: Optional[UploadFile] = File(None),
+    image_hash: Optional[str] = Form(None),
     language: str = Form(...),
+    additional_context: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
 
@@ -51,7 +59,7 @@ async def identify_object(
     # --- Call main pipeline ---
     try:
         result = await identify_and_translate(
-            image_base64, imagehash, image_filename, language
+            image_base64, imagehash, image_filename, language, additional_context
         )
         # print("\n\nFinal result from identify_and_translate: ", result)
         if "error" in result and result["error"]:

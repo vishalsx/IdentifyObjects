@@ -79,6 +79,9 @@ class OrgCollection:
         return await self.collection.find_one(filter, *args, **kwargs)
 
 
+    async def count_documents(self, filter: Dict[str, Any] | None = None, *args, **kwargs):
+        filter = await self._inject_org_filter(filter or {})
+        return await self.collection.count_documents(filter, *args, **kwargs)
 
 
     # # find (returns Motor cursor) - caller can await cursor.to_list(...)

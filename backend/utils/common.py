@@ -250,7 +250,7 @@ async def get_permission_state_translations(current_translations_state: str, act
     # normalising the current_metadata_state
 
     normalized_current_translation_state = None if current_translations_state in (None, "", "null") else current_translations_state
-
+    print("\nNormalized Current Translation State: ", normalized_current_translation_state)
     state_transitions = rule.get("stateTransitions", {})
 
     print("state Transition Metadata: ", state_transitions)
