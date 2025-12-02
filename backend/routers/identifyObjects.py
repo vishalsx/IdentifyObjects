@@ -30,7 +30,7 @@ async def identify_object(
 
     # --- Case 1: image hash provided. hash takes priority ---
     if image_hash:
-        print ("\nImage hash provided:", image_hash)
+        print ("\n❌❌❌Image hash provided:", image_hash)
         doc = await objects_collection.find_one({"image_hash": image_hash})
         if not doc:
             raise HTTPException(status_code=404, detail="No object found for given image_hash")

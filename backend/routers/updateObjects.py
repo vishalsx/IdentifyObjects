@@ -28,6 +28,7 @@ def clean_mongo_document(doc: dict) -> dict:
 @router.post("/object")
 async def update_object(
     image: UploadFile = File(None),
+    image_hash: str = Form(None),
     common_attributes: str = Form(...),
     language_attributes: str = Form(...),
     permission_action: str = Form(...),
@@ -38,15 +39,16 @@ async def update_object(
         common_data = json.loads(common_attributes)
         language_data = json.loads(language_attributes)
         response: list = []
-
+        print("\n -----------Inside update object -------------------")
         if not isinstance(language_data, list) or not language_data:
             raise HTTPException(status_code=400, detail="language_attributes must be a non-empty list")
         if permission_action not in ["ApproveText", "RejectText"]:
             # image_base64 = await image_to_base64(image) if image else None
             image_filename = image.filename if image else None
+            print (f"\n🔵🔵🔵Processing image file:{image_filename}\nImage Hash Received:{image_hash}")
 
             for lang_item in language_data:
-                resp = await save_to_db(image_filename, image, common_data, lang_item, permission_action, background_tasks)
+                resp = await save_to_db(image_filename, image, image_hash, common_data, lang_item, permission_action, background_tasks)
                 if resp:
                     response.extend(resp if isinstance(resp, list) else [resp])
         else:

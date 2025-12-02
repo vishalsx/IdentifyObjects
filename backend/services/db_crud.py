@@ -202,18 +202,25 @@ async def update_status_only(common_data: dict, language_row: dict, permission_a
 
 
 # Create Object (with Deduplication + First Translation)
-async def save_to_db(image_name: str,image: UploadFile, common_data: any, lang_row: any, permission_action: str, background_tasks: BackgroundTasks):
+async def save_to_db(image_name: str,image: UploadFile, image_hash:str , common_data: any, lang_row: any, permission_action: str, background_tasks: BackgroundTasks):
     obj_id = None
     translation_id = None
-    
+    print ("\n🔶🔶🔶 Common data received fro frontend", common_data)
+    print ("\n🔶🔶🔶 language row", lang_row)
     if not image:
      #try to ge the record based on translation id
         obj_id = ObjectId(common_data.get("object_id"))
         print("Looking for Objects presence..",obj_id)
         existing_object = await objects_collection.find_one( {"_id": obj_id} )
+    
+    elif image_hash:
+        print ("\nImage Hash provided from frontend: ", image_hash)
+        # Check for existing object by image hash only. name can be duplicate
+        existing_object = await objects_collection.find_one( {"image_hash": image_hash} )
 
     else:                                                    #try to get the record based on image hash
         image_hash = await compute_hash(image)
+        print ("\nImage Hash computed: ", image_hash)
         # print("\nPermission Action from frontend: ", permission_action)
         # Check for existing object by image hash only. name can be duplicate
         existing_object = await objects_collection.find_one( {"image_hash": image_hash} )
