@@ -13,13 +13,58 @@ from models.analysis_schema import AnalysisResult
 from services.prompt_orchestrator import orchestrate_prompt
 from dotenv import load_dotenv
 import os
-
+import ast
 load_dotenv()
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable not set")
 os.environ["GOOGLE_API_KEY"] = API_KEY
 temperature = os.getenv("DEFAULT_TEMPERATURE", "0.2")
+
+
+import json
+import re
+
+import json
+import ast
+import re
+
+def clean_llm_output(raw_output: str) -> str:
+    cleaned = re.sub(r"^```(json)?|```$", "", raw_output.strip(), flags=re.MULTILINE).strip()
+    cleaned = cleaned.replace("\ufeff", "").replace("\u200b", "")
+    cleaned = re.sub(r"\bNone\b", "null", cleaned)
+    cleaned = re.sub(r"\bTrue\b", "true", cleaned)
+    cleaned = re.sub(r"\bFalse\b", "false", cleaned)
+    cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+    return cleaned
+
+
+import json
+import re
+
+
+def safe_json_load(raw_output: str):
+    if not raw_output:
+        return None
+    text = raw_output.strip()
+    # 1. Extract JSON inside json ... 
+    fenced = re.search(r"(?:json)?\s*(\{.*?\})\s*", text, flags=re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    # 2. If fenced not found, try to extract the first {...} block
+    if not fenced:
+        brace = re.search(r"(\{.*\})", text, flags=re.DOTALL)
+        if brace:
+            text = brace.group(1).strip()
+    # 3. Remove trailing commas (common LLM issue)
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+    # 4. Remove weird unicode or markdown artifacts
+    text = text.replace("\u200b", "").replace("\ufeff", "")
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
+
 
 
 def get_gemini_model_vision():
@@ -74,7 +119,9 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
 
         9. Generate a **field of study in English** (e.g., "botany", "zoology", "architecture", "culinary arts", "engineering", "art history").  
 
-        10. Generate the **age appropriateness in English**: "all ages", "kids", "teens", "adults", "seniors".  
+        10. Generate the **age appropriateness in English**: "all ages", "kids", "teens", "adults", "seniors".
+        11. Generate at least 15 questions and answers of varying difficulty with the **difficulty level** in **Quiz style** to test the knowledge, related to the object and the object description, in `target_language` and `language_script`. Ensure the question and answers are precise and educational.
+
 
         ---
 
@@ -99,6 +146,7 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
         "object_category": "<category in English>",
         "field_of_study": "<field of study in English>",
         "age_appropriate": "<all ages | kids | teens | adults | seniors>"
+        "quiz_qa": [ {"question": "<question1 in target_language using language_script>", "answer": "<answer1 in target_language using language_script>", "difficulty_level": "<low, medium, high, very high>"}
         "error:" "<Inappropriate content detected. Can't be processed..>"
         }
         """
@@ -115,10 +163,10 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
         else:
             language_script = language_details.get("script", "")
         
-
+        print (f"\n🔴🔴🔴Target Language: {target_language}, Script: {language_script}")
         SYSTEM_PROMPT = await orchestrate_prompt(SYSTEM_PROMPT, DEFAULT_AGENT)
         # print("\nFinal SYSTEM PROMPT used:\n", SYSTEM_PROMPT)
-
+        
         try:
             existing_result = await get_existing_data_imagehash(imagehash, target_language)
             # print("Existing result returned:", existing_result)
@@ -135,7 +183,7 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
                     print("\nTranslation result:", translation_found)
                     image_found_in_database = False
             else:
-                print("\nNothing found in DB in hash search: ", existing_result.get("message") )
+                print("\nNothing found in DB in hash search.. ")
                 image_found_in_database = False
                 existing_result = None
 
@@ -183,25 +231,26 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
                 # This catches failures specifically from the structured output parser
                 # (e.g., model returned non-JSON despite the config)
                 print(f"\nOutputParserException (Model failed to adhere to schema): {str(e)} and provided following resposne: {response}")    
-
-
-
     
             # Attempt to parse JSON output
             try:
                 raw_output = response.content.strip()
                 cleaned_output = re.sub(r"^```(json)?|```$", "", raw_output.strip(), flags=re.MULTILINE).strip()
                 result = json.loads(cleaned_output) 
-                # if "error" in result:
-                #     return {"error": "Inappropriate content uploaded.."}
-                    
+              
+                # raw_output = response.content.strip()
+                # result = safe_json_load(raw_output)
+
+                # if not isinstance(result, dict):
+                #     result = {}
+    
                 if result.get("error"): # This is robust and checks if the value is truthy (non-empty string)
                     return {"error": result.get("error")}
 
                 # If result["error"] is '', the condition is False, and processing continues.
         
                 #insert the state of database match for Object and Translation
-                print(f"AI Output for {target_language}:", result)
+                print(f"✨✨✨✨✨✨AI Output for {target_language}:✨✨✨✨✨✨", result)
                 
                 #Overwrite common data fields if already available in database. Dont use AI fields in this case for commondata only.
                 #This cover the case when only object exists and no translation is available. will overwrite only commondata
@@ -219,7 +268,7 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
 
                 return result    #return the AI result from here only
             except Exception as e:
-                print(f"exception in JSON paarsing for LLM output: {str(e)}\nResult:", result)
+                print(f"exception in JSON paarsing for LLM output: {str(e)}")
                 return {
                     "error": "Failed to parse Gemini output as JSON",
                     "raw_output": response.content,

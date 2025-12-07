@@ -236,5 +236,5 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         org_id=org_data.get("org_id")
     )
 
-
+    print("\nLogin successful for user:", login_response)
     return login_response

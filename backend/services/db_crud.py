@@ -367,7 +367,7 @@ async def save_to_db(image_name: str,image: UploadFile, image_hash:str , common_
                     "object_description": lang_row.get("object_description", ""),
                     "object_hint": lang_row.get("object_hint", ""),
                     "object_short_hint": lang_row.get("object_short_hint", ""),
-                    #"translation_status": await get_permission_state_translations (lang_row.get("translation_status"), permission_action ), #will be Null if new
+                    "quiz_qa": lang_row.get("quiz_qa", []),  # list of {question, answer}
                     "translation_status": await get_permission_state_translations (current_translation_status, permission_action ),    #use current status from DB to get new status
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                     "updated_by": common_data.get("userid", "anonymous"),
@@ -488,6 +488,7 @@ def map_translation_collection(translation_coll: any):
             "object_description": translation_coll.get("object_description", ""),
             "object_hint": translation_coll.get("object_hint", ""),
             "object_short_hint": translation_coll.get("object_short_hint", ""),
+            "quiz_qa": translation_coll.get("quiz_qa", []),  # list of {question, answer}
             "translation_status": translation_coll.get("translation_status", ""),
             "translation_id": str(translation_coll.get("_id")),  # translation id required for correct record updation at backend
             "flag_translation": True,
@@ -555,6 +556,7 @@ async def get_existing_data_imagehash(imagehash: str, language: str):
                     "object_description": translation.get("object_description", ""),
                     "object_hint": translation.get("object_hint", ""),
                     "object_short_hint": translation.get("object_short_hint", ""),
+                    "quiz_qa": translation.get("quiz_qa", []),  # list of {question, answer}
                     "translation_status": translation.get("translation_status", ""),  # translation status
                     "translation_id": str(translation.get("_id")),  # translation id required for correct record updation at backend
                     "flag_translation": translation_found,

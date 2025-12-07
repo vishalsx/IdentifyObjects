@@ -133,7 +133,8 @@ Ensure that the generated prompt contains instructions for the LLM which aligns 
 - Ask it to Generate a **short hint** (10–15 words) in the <"target_language"> with the followiing rules:  
         1. Do not reveal the object name
         2. Keep it very brief and concise and try and use riddles, proverbs, or cultural sayings.
-- Ask ot to always use the "<target_language>" and "<language_script>" provided in the HumanMessage for generating the output fields which require translation.
+- Ask it to always use the "<target_language>" and "<language_script>" provided in the HumanMessage for generating the output fields which require translation.
+- Ask it to Generate at least 15 questions and answers of varying difficulty with the **difficulty level** in **Quiz style**  to test the knowledge, related to the object and the object description, in "<target_language>" and "<language_script>". Ensure the question and answers are precise and educational.
 
 """
     fixed_prompt_footer = """
@@ -164,6 +165,7 @@ Output JSON format:
 "object_category": "<category in English>",
 "field_of_study": "<field of study in English>",
 "age_appropriate": "<all ages | kids | teens | adults | seniors>"
+"quiz_qa": [ {"question": "<question1 in target_language using language_script>", "answer": "<answer1 in target_language using language_script>", "difficulty_level": "<low, medium, high, very high>"}
 "error:" "<Inappropriate content detected. Can't be processed if its an inappropriate image..>"
 }
 
@@ -290,50 +292,3 @@ Generated Prompt to be reviewed: {prompt}
 
 
     
-
-#------------PROMPT GENERATION TEMPLATE-------------------------------------------#
-
-
-#   base_prompt_template= """
-
-# Can you generate a precise system prompt for LLM, which acts as a {new_agent}. 
-# Generate the output as a string only and not JSON since htis prompt will be used to pass to another LLM call.
-
-
-# Ensure that the generated prompt contains instructions for the LLM which aligns to the context of the {new_agent} in terms of:
-# - Ask it to generate useful information about objects in images which are relevant for {new_agent}.
-# - Ask it to generate information keeping target audience of {new_agent} in mind.
-# - Ask it to generate information with Domain expertise relevant to {new_agent}.
-# - Ask it to generate fun facts about the image relevant to {new_agent} 
-# - ask it to always remain culturally sensitive when generating the prompt for {new_agent}.
-# - Ask it to raise errors for inappropriate content in the image.
-# - Ask it adhere to age appropriateness guidelines.
-
-
-# **Mention that the structure of the proimpt should follow the following JSON schema strictly without any deviation.***
-# Mention the following clearly in the generated prompt:
-# "
-# It will always receive input in the following format inside the HumanMessage:
-# {
-# "target_language": "<language name>",
-# "language_script": "<writing script>"
-# }
-# It will also receive an image encoded as base64.
-# The output is strictly in **valid JSON only** (no markdown, no comments).
-# Output JSON format:
-# {
-# "object_name_en": "<object name in English>",
-# "object_name": "<object name in target_language using language_script>",
-# "translated_to": "<target_language>",
-# "object_description": "<description about the object in target_language using language_script>",
-# "object_hint": "<hint in target_language using language_script>",
-# "object_short_hint": "<short hint without naming the object in target_language using language_script>",
-# "tags": ["<tag1>", "<tag2>", "..."],
-# "object_category": "<category in English>",
-# "field_of_study": "<field of study in English>",
-# "age_appropriate": "<all ages | kids | teens | adults | seniors>"
-# "error:" "<Inappropriate content detected. Can't be processed if its an inappropriate image..>"
-# }
-# "
-
-# """
