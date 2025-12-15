@@ -71,7 +71,6 @@ class Book(BaseModel):
     grade_level: Optional[str] = None
     tags: Optional[List[str]] = Field(default_factory=list)
     chapters: Optional[List[Chapter]] = Field(default_factory=list)
-
     # --- New Count Fields ---
     chapter_count: int = Field(0, description="Total number of chapters in the book")
     page_count: int = Field(0, description="Total number of pages across all chapters")
@@ -81,6 +80,7 @@ class Book(BaseModel):
     created_by: Optional[str] = Field(get_current_user_id(), description="User ID of the creator")
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
+    org_id: Optional[str] = Field(None, description="Organization ID associated with the book")
 
 
     model_config = {

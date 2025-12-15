@@ -38,7 +38,9 @@ def get_current_user_id() -> str | None:
 def get_organisation_id() -> str | None:
     """Retrieve organisation Id if it exists for the user"""
     user = _current_user.get()
-    org_id = user.get("organisation_id")
+    if user:
+        org_id = user.get("organisation_id")
+        
     return org_id if user and org_id else None
 
 

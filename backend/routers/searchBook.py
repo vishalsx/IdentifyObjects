@@ -19,18 +19,22 @@ async def search_books(
     Returns only top-level book data (no chapters/pages).
     """
     try:
-        regex = re.compile(re.escape(search_text), re.IGNORECASE)
-        query = {
-            "$or": [
-                {"title": regex},
-                {"author": regex},
-                {"subject": regex},
-                {"grade_level": regex},
-                {"tags": regex},
-                {"chapters.chapter_name": regex},
-            ]
-        }
-        if language:
+        print(f"\n\n*******Language passed: {language   }, Current user: {current_user}")
+        if search_text.lower() == "all":
+            query = {} #Fetch all books
+        else:
+            regex = re.compile(re.escape(search_text), re.IGNORECASE)
+            query = {
+                "$or": [
+                    {"title": regex},
+                    {"author": regex},
+                    {"subject": regex},
+                    {"grade_level": regex},
+                    {"tags": regex},
+                    {"chapters.chapter_name": regex},
+                ]
+            }
+        if language: #Language should always be specified.
             query["language"] = language
 
         projection = {
@@ -48,9 +52,11 @@ async def search_books(
             "created_at": 1,
             "updated_at": 1,
         }
-
+        
         cursor = books_collection.find(query, projection)
         results = await cursor.to_list(length=50)
+        # Sort results by grade and title in ascending order
+        results = sorted(results, key=lambda b: (b.get("grade_level", ""), b.get("title", "")), reverse=False)
 
         for b in results:
             b["_id"] = str(b["_id"])

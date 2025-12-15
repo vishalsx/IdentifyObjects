@@ -71,7 +71,13 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
         9. Generate a **field of study in English** (e.g., "botany", "zoology", "architecture", "culinary arts", "engineering", "art history").  
 
         10. Generate the **age appropriateness in English**: "all ages", "kids", "teens", "adults", "seniors".
-        11. Generate at least 15 questions and answers of varying difficulty with the **difficulty level** in **Quiz style** to test the knowledge, related to the object and the object description, in `target_language` and `language_script`. Ensure the question and answers are precise and educational.
+        11. Generate at least 15 questions and answers of varying difficulty with the **difficulty level** in **Quiz style** to test the knowledge, related to the object and the object description, in `target_language` and `language_script`. Follow the following rules for generating questions and answers:
+            - Must ensure the question and answers are precise and educational
+            - Must ensure that ***answers are never same*** for more than 1 generated questions.
+            - Must ensure that the answers are never same as the object name itself
+            - Avoid generating Yes No or True False type of question/answers
+            - Vary the difficulty levels across low, medium, high, very high
+            - The question and answers must align to the context as defined in system promt : ***{DEFAULT_AGENT}***
 
 
         ---
@@ -146,7 +152,9 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
         # Attempt to parse JSON output
         try:            
             raw_output = response.content.strip()
-            cleaned_output = re.sub(r"^```(json)?|```$", "", raw_output.strip(), flags=re.MULTILINE).strip()
+            # cleaned_output = re.sub(r"^```(json)?|```$", "", raw_output.strip(), flags=re.MULTILINE).strip()
+            # cleaned_output = re.sub(r"(?<![A-Za-z0-9])'([^']*)'(?![A-Za-z0-9])", r'"\1"', cleaned_output)
+            cleaned_output = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_output.strip(), flags=re.DOTALL)
             result = json.loads(cleaned_output) 
 
             if not isinstance(result, dict):
@@ -158,7 +166,7 @@ async def identify_and_translate(image_base64: str, imagehash: str, image_filena
             print(f"✨✨✨✨✨✨AI Output for {target_language}:✨✨✨✨✨✨", result)
             return result    #return the AI result from here only
         except Exception as e:
-            print(f"exception in JSON paarsing for LLM output: {str(e)}")
+            print(f"exception in JSON paarsing for LLM output: {str(e)}: {response.content}")
             return {
                 "error": "Failed to parse Gemini output as JSON",
                 "raw_output": response.content,

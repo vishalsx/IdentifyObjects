@@ -134,7 +134,13 @@ Ensure that the generated prompt contains instructions for the LLM which aligns 
         1. Do not reveal the object name
         2. Keep it very brief and concise and try and use riddles, proverbs, or cultural sayings.
 - Ask it to always use the "<target_language>" and "<language_script>" provided in the HumanMessage for generating the output fields which require translation.
-- Ask it to Generate at least 15 questions and answers of varying difficulty with the **difficulty level** in **Quiz style**  to test the knowledge, related to the object and the object description, in "<target_language>" and "<language_script>". Ensure the question and answers are precise and educational.
+- Ask it Generate at least 15 questions and answers of varying difficulty with the **difficulty level** in **Quiz style** to test the knowledge, related to the object and the object description, in "<target_language>" and "<language_script>". Ask it to Follow the all the following rules for generating questions and answers:
+            - It must ensure the question and answers are precise and educational
+            - It must ensure that ***answers are never same*** for more than 1 generated questions.
+            - It must ensure that the answers are never same as the object name itself
+            - It must Avoid generating Yes No or True False type of question/answers
+            - It must vary the difficulty levels across low, medium, high, very high
+            - It must align question and answers to the context as defined in system promt : ***{new_agent}***
 
 """
     fixed_prompt_footer = """

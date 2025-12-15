@@ -105,6 +105,8 @@ class OrgCollection:
                 filter["org_id"] = org_id
             else:
                 filter["$or"] = [{"org_id": {"$exists": False}}, {"org_id": None}]
+       
+        print("\n\n*******",filter)   
         return self.collection.find(filter, *args, **kwargs)
 
 
