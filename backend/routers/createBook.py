@@ -161,11 +161,11 @@ async def create_or_update_book(
         # -----------------------
         # ✅ UPDATE EXISTING BOOK
         # -----------------------
+        print (f"\n📗 Attempting to create/update book..with book id {book_data}.")
         try:
             if "_id" in book_data and book_data["_id"]: 
                 book_id = ObjectId(book_data["_id"])
                 existing = await books_collection.find_one({"_id": book_id})
-
                 if existing and existing.get("created_by") == user_id:
                     existing_org_id = existing.get("org_id")
                     if org_check:
@@ -181,7 +181,8 @@ async def create_or_update_book(
                     safe_updated_doc = convert_objectid_to_str(updated_doc)
                     return safe_updated_doc
                 else:
-                    raise HTTPException(status_code=403, detail="You do not have permission to update this book.")
+                    # raise HTTPException(status_code=403, detail="You do not have permission to update this book.")
+                    pass # should be created as new book
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to update book: {str(e)}")
         # ---------------------
