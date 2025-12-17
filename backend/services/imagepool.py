@@ -155,7 +155,8 @@ async def _vector_search(query_vector: list, org_id: str | None, threshold: floa
                     "image_store": 1,
                     "embedding_text": 1,
                     "score": {"$meta": "vectorSearchScore"},
-                    "org_id": 1 # Include org_id in project for matching
+                    "org_id": 1, # Include org_id in project for matching
+                    "image_hash": 1
                 }
             },
             match_stage, 
@@ -163,8 +164,26 @@ async def _vector_search(query_vector: list, org_id: str | None, threshold: floa
             {"$limit": limit}, # Use dynamic limit
         ]
 
-        results = objects_collection.aggregate(pipeline)
-        results = await results.to_list(length=limit)
+        results_cursor = objects_collection.aggregate(pipeline)
+        raw_results = await results_cursor.to_list(length=limit)
+        
+        # Deduplicate by image_hash, preferring records with org_id
+        unique_map = {}
+        for obj in raw_results:
+            img_hash = obj.get("image_hash")
+            # If image_hash is missing, use _id as unique key to preserve the object
+            key = img_hash if img_hash else str(obj["_id"])
+            
+            if key not in unique_map:
+                unique_map[key] = obj
+            else:
+                # If we already have this hash, check if the new one is 'better' (has org_id)
+                # If current obj has org_id and the stored one doesn't, swap it.
+                if obj.get("org_id") and not unique_map[key].get("org_id"):
+                    unique_map[key] = obj
+        
+        results = list(unique_map.values())
+
         print ("\n Vector search results: ", results)
         if results:
             avg_score = sum(r.get("score", 0) for r in results) / len(results)
@@ -189,30 +208,30 @@ async def _text_search(search_query: str, org_id: str | None, limit: int = 50) -
     logger.info(f"🔎 Starting text search for query: '{search_query[:30]}...' and org_id: {org_id}, limit: {limit}")
     try:
         # 1. Build the flexible org filter: Private OR Global
-        if org_id:
-            org_query = {
-                "$or": [
-                    {"org_id": org_id},
-                    {"org_id": {"$exists": False}},
-                    {"org_id": None}
-                ]
-            }
-        else:
-            org_query = {
-                "$or": [
-                    {"org_id": {"$exists": False}},
-                    {"org_id": None}
-                ]
-            }
+        # if org_id:
+        #     org_query = {
+        #         "$or": [
+        #             {"org_id": org_id},
+        #             {"org_id": {"$exists": False}},
+        #             {"org_id": None}
+        #         ]
+        #     }
+        # else:
+        #     org_query = {
+        #         "$or": [
+        #             {"org_id": {"$exists": False}},
+        #             {"org_id": None}
+        #         ]
+        #     }
 
         # 2. Combine text search, status, and org filter
         query_filter = {
             "$text": {"$search": search_query},
-            "image_status": "Approved", # Only Approved objects
-            "$and": [org_query] # Inject the flexible org filter
+            "image_status": "Approved"# Only Approved objects
+            # "$and": [org_query] # Inject the flexible org filter
         }
         logger.debug(f"Text Search Query Filter: {query_filter}")
-
+        print(f"\n\n*******Inside text search: Filter used: {query_filter}")
         cursor = objects_collection.find(
             query_filter,
             {
@@ -221,11 +240,30 @@ async def _text_search(search_query: str, org_id: str | None, limit: int = 50) -
                 "metadata": 1,
                 "image_store": 1,
                 "embedding_text": 1,
+                "image_hash": 1,
+                "org_id": 1,
                 "score": {"$meta": "textScore"}
             }
         ).sort([("score", {"$meta": "textScore"})]).limit(limit) # Use dynamic limit
         
-        results = await cursor.to_list(length=limit)
+        raw_results = await cursor.to_list(length=limit)
+
+        # Deduplicate by image_hash, preferring records with org_id
+        unique_map = {}
+        for obj in raw_results:
+            img_hash = obj.get("image_hash")
+            # If image_hash is missing, use _id as unique key to preserve the object
+            key = img_hash if img_hash else str(obj["_id"])
+            
+            if key not in unique_map:
+                unique_map[key] = obj
+            else:
+                # If we already have this hash, check if the new one is 'better' (has org_id)
+                # If current obj has org_id and the stored one doesn't, swap it.
+                if obj.get("org_id") and not unique_map[key].get("org_id"):
+                    unique_map[key] = obj
+        
+        results = list(unique_map.values())
         
         if results:
             logger.info(f"✅ Text search: {len(results)} results")
@@ -243,21 +281,21 @@ async def _fuzzy_search_limited(search_query: str, org_id: str | None, threshold
     logger.info(f"🔎 Starting fuzzy search for query: '{search_query[:30]}...' and org_id: {org_id} with threshold: {threshold:.2f}, limit: {limit}")
     try:
         # 1. Build the flexible org filter: Private OR Global
-        if org_id:
-            org_query = {
-                "$or": [
-                    {"org_id": org_id},
-                    {"org_id": {"$exists": False}},
-                    {"org_id": None}
-                ]
-            }
-        else:
-            org_query = {
-                "$or": [
-                    {"org_id": {"$exists": False}},
-                    {"org_id": None}
-                ]
-            }
+        # if org_id:
+        #     org_query = {
+        #         "$or": [
+        #             {"org_id": org_id},
+        #             {"org_id": {"$exists": False}},
+        #             {"org_id": None}
+        #         ]
+        #     }
+        # else:
+        #     org_query = {
+        #         "$or": [
+        #             {"org_id": {"$exists": False}},
+        #             {"org_id": None}
+        #         ]
+        #     }
 
         # Pre-filter using regex for better performance
         prefix = search_query[:3].lower() if len(search_query) >= 3 else search_query.lower()
@@ -266,15 +304,14 @@ async def _fuzzy_search_limited(search_query: str, org_id: str | None, threshold
         # 2. Combine status, regex filter, and org filter
         fuzzy_pre_filter = {
             "image_status": "Approved", # Only Approved objects
-            "$and": [org_query], 
             "$or": [
                 {"object_name_en": {"$regex": regex_pattern, "$options": "i"}},
                 {"embedding_text": {"$regex": regex_pattern, "$options": "i"}},
                 {"metadata.tags": {"$regex": regex_pattern, "$options": "i"}},
             ]
-        }
+        }         # "$and": [org_query], add it above later
         logger.debug(f"Fuzzy Pre-Filter Query: {fuzzy_pre_filter}")
-
+        print(f"\n\n*******Inside fuzzy search: Filter used: {fuzzy_pre_filter}")   
         cursor =  objects_collection.find(
             fuzzy_pre_filter,
             {
@@ -282,12 +319,32 @@ async def _fuzzy_search_limited(search_query: str, org_id: str | None, threshold
                 "metadata": 1,
                 "object_name_en": 1,
                 "image_store": 1,
-                "embedding_text": 1
+                "embedding_text": 1,
+                "image_hash": 1,
+                "org_id": 1
             }
         ).limit(limit) # Use dynamic limit
         
-        objects = await cursor.to_list(length=limit)
-        logger.info(f"📋 Fuzzy pre-filter: {len(objects)} candidates fetched for detailed check.")
+        raw_objects = await cursor.to_list(length=limit)
+
+        # Deduplicate by image_hash, preferring records with org_id
+        unique_map = {}
+        for obj in raw_objects:
+            img_hash = obj.get("image_hash")
+            # If image_hash is missing, use _id as unique key to preserve the object
+            key = img_hash if img_hash else str(obj["_id"])
+            
+            if key not in unique_map:
+                unique_map[key] = obj
+            else:
+                # If we already have this hash, check if the new one is 'better' (has org_id)
+                # If current obj has org_id and the stored one doesn't, swap it.
+                if obj.get("org_id") and not unique_map[key].get("org_id"):
+                    unique_map[key] = obj
+        
+        objects = list(unique_map.values())
+
+        logger.info(f"📋 Fuzzy pre-filter: {len(objects)} candidates fetched for detailed check (deduplicated from {len(raw_objects)}).")
         
         results = []
         

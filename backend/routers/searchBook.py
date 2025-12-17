@@ -3,23 +3,115 @@ from typing import List, Optional
 from bson import ObjectId
 import re
 from services.userauth import get_current_user
-from db.connection import books_collection, objects_collection
+from db.connection import books_collection, objects_collection, organisations_collection
+from services.userauth import get_organisation_id
 
 router = APIRouter(prefix="/curriculum/books", tags=["Books"])
+
+
+
+async def fetch_books_for_external_org(external_org_id: str, search_text: str, language: Optional[str]):
+    """
+    Helper to fetch books for a specific external organization.
+    - If external_org_id == user's org_id: Fetch normally (private allowed).
+    - If external_org_id != user's org_id: Fetch ONLY if external org is Public.
+    """
+    user_org_id = get_organisation_id()
+
+    # 1. Access Control Logic
+    if external_org_id != user_org_id:
+        # Check if the external organization is Public
+        # The user's prompt says: "allow this if the org_type is Public ( this field is available in organsations collection)"
+        print(f"Checking if external org {external_org_id} is Public...")
+        org_doc = await organisations_collection.find_one({"org_id": external_org_id})
+        
+        if not org_doc:
+             # Org doesn't exist, return empty or raise error? Returning empty list seems safer/cleaner for search.
+             print(f"External org {external_org_id} not found.")
+             return []
+        
+        org_type = org_doc.get("org_type")
+        if org_type.lower() != "public":
+            print(f"External org {external_org_id} is {org_type}, not Public. Access denied.")
+            return []
+        
+        print(f"External org {external_org_id} is Public. Access granted.")
+
+    # 2. Build Query
+    if search_text.lower() == "all":
+        query = {} 
+    else:
+        regex = re.compile(re.escape(search_text), re.IGNORECASE)
+        query = {
+            "$or": [
+                {"title": regex},
+                {"author": regex},
+                {"subject": regex},
+                {"grade_level": regex},
+                {"tags": regex},
+                {"chapters.chapter_name": regex},
+            ]
+        }
+    
+    if language:
+        query["language"] = language
+    
+    # CRITICAL: We must manually enforce the org_id query since we are bypassing the default context
+    # logical "AND" with the specific external_org_id
+    query["org_id"] = external_org_id
+
+    projection = {
+        "_id": 1,
+        "title": 1,
+        "language": 1,
+        "author": 1,
+        "subject": 1,
+        "education_board": 1,
+        "grade_level": 1,
+        "chapter_count": 1, 
+        "page_count": 1,
+        "image_count": 1, 
+        "tags": 1,
+        "created_at": 1,
+        "updated_at": 1,
+        "created_by": 1,
+        "org_id": 1
+    }
+
+    # Use books_collection, relying on the fact that if we pass 'org_id' in filter, 
+    # the OrgCollection wrapper respects it (as seen in db/connection.py: "if 'org_id' in filter...")
+    cursor = books_collection.find(query, projection)
+    results = await cursor.to_list(length=50)
+    
+    # Sort results
+    results = sorted(results, key=lambda b: (b.get("grade_level", ""), b.get("title", "")), reverse=False)
+
+    for b in results:
+        b["_id"] = str(b["_id"])
+    
+    return results
 
 
 @router.get("/search")
 async def search_books(
     search_text: str = Query(..., description="Text to search across title, author, subject, etc."),
     language: Optional[str] = Query(None, description="Optional language filter"),
+    external_org_id: Optional[str] = Query(None, description="Optional organization ID passed from external system"),
     current_user: dict = Depends(get_current_user)
 ):
     """
     🔍 Search books by title, author, subject, grade, tags, or chapter name.
     Returns only top-level book data (no chapters/pages).
     """
+  
     try:
-        print(f"\n\n*******Language passed: {language   }, Current user: {current_user}")
+        print(f"\n\n*******Language passed: {language}, External Org: {external_org_id}, Current user: {current_user}")
+        
+        # Requirement 1 & 2: If external_org_id is passed, delegate to helper.
+        if external_org_id:
+             return await fetch_books_for_external_org(external_org_id, search_text, language)
+
+        # Existing Logic (Requirement 2: If external_org_id is not passed)
         if search_text.lower() == "all":
             query = {} #Fetch all books
         else:
@@ -51,6 +143,8 @@ async def search_books(
             "tags": 1,
             "created_at": 1,
             "updated_at": 1,
+            "created_by": 1,
+            "org_id": 1,
         }
         
         cursor = books_collection.find(query, projection)
@@ -150,7 +244,9 @@ async def get_chapter_pages(
             {
                 "page_id": p.get("page_id"),
                 "page_number": p.get("page_number"), 
-                "title": p.get("title")
+                "title": p.get("title"),
+                "story": p.get("story"),
+                "moral": p.get("moral")
             }
             for p in chapter.get("pages", [])
         ]
