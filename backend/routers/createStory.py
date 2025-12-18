@@ -77,8 +77,8 @@ async def generate_story_for_page(
             raise HTTPException(status_code=404, detail="Page not found")
 
         images = page.get("images", [])
-        if len(images) < 5:
-            raise HTTPException(status_code=400, detail="Page must have at least 5 images")
+        if len(images) < 1:
+            raise HTTPException(status_code=400, detail="Page must have at least 1 images")
 
         # 🟩 4. Retrieve image_base64 + thumbnails
         enriched_images = []
