@@ -116,102 +116,179 @@ def resequence_book_structure(book_data: dict) -> dict:
     return book_data
 
 
+# @router.post("/create_book", response_model=Book)
+# async def create_or_update_book(
+#     book: Book,
+#     current_user: dict = Depends(get_current_user)
+#     ):
+
+#     try:
+#         book.updated_at = datetime.now(timezone.utc)
+#         book_data = book.model_dump(by_alias=True, exclude_none=True)
+        
+#         user_id = get_current_user_id()
+#         org_id = get_organisation_id()
+        
+#         if org_id is None:
+#             org_check = False
+#         else:
+#             org_check = True
+
+       
+#         # 🔄 STEP 1: Resequence
+#         book_data = resequence_book_structure(book_data)
+        
+#         # STEP 2: Get accurate counts from IDs
+#         max_counters = get_max_sequences(book_data)
+
+#         book_data["chapter_count"] = max_counters["next_chapter_seq"]
+#         book_data["page_count"] = max_counters["next_page_seq"]
+#         book_data["image_count"] = max_counters["next_image_seq"]
+        
+        
+#         # # 🔢 STEP 2: Calculate counts (safe defaults)
+#         # chapters = book_data.get("chapters", [])
+        
+#         # #Use the following for a quick summary
+#         # book_data["chapter_count"] = len(chapters)
+#         # book_data["page_count"] = sum(len(ch.get("pages", [])) for ch in chapters)
+#         # book_data["image_count"] = sum(
+#         #     len(pg.get("images", []))
+#         #     for ch in chapters
+#         #     for pg in ch.get("pages", [])
+#         # )
+
+#         # -----------------------
+#         # ✅ UPDATE EXISTING BOOK
+#         # -----------------------
+#         print (f"\n📗 Attempting to create/update book..with book id {book_data}.")
+#         try:
+#             if "_id" in book_data and book_data["_id"]: 
+#                 book_id = ObjectId(book_data["_id"])
+#                 existing = await books_collection.find_one({"_id": book_id})
+#                 if existing and existing.get("created_by") == user_id:
+#                     existing_org_id = existing.get("org_id")
+#                     if org_check:
+#                         if existing_org_id != org_id:
+#                             raise HTTPException(status_code=403, detail="You do not have permission to update this book.")
+                    
+#                     result = await books_collection.update_one(
+#                     {"_id": book_id},
+#                     {"$set": book_data}
+#                     )
+#                     print(f"\nUpdated sequence counts: Chapter {book_data['chapter_count']},\nPage Count: {book_data['page_count']},\nImage Count: {book_data['image_count']}\n")
+#                     updated_doc = await books_collection.find_one({"_id": book_id})
+#                     safe_updated_doc = convert_objectid_to_str(updated_doc)
+#                     return safe_updated_doc
+#                 else:
+#                     # raise HTTPException(status_code=403, detail="You do not have permission to update this book.")
+#                     pass # should be created as new book
+#         except Exception as e:
+#             raise HTTPException(status_code=500, detail=f"Failed to update book: {str(e)}")
+#         # ---------------------
+#         # 🆕 CREATE NEW BOOK
+#         # ---------------------
+#         try:
+#             book_data["book_status"] = "Draft" 
+#             if user_id:
+#                 book_data["created_by"] = user_id
+#             else:
+#                 book_data["created_by"] = "anonymous"
+            
+#             book_data["created_at"] =  datetime.now(timezone.utc)
+            
+#             if org_id:    
+#                 book_data["org_id"] = org_id
+
+#             result = await books_collection.insert_one(book_data)
+#             book_data["_id"] = result.inserted_id
+
+            
+#             safe_book_data = convert_objectid_to_str(book_data)
+#             print(f"📘 Created new book:{book_data['_id']}")
+
+#             return safe_book_data
+#         except Exception as e:
+#             raise HTTPException(status_code=500, detail=f"Failed to create book: {str(e)}")
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Failed to create/update book: {str(e)}")
+
 @router.post("/create_book", response_model=Book)
 async def create_or_update_book(
     book: Book,
     current_user: dict = Depends(get_current_user)
-    ):
-
+):
     try:
         book.updated_at = datetime.now(timezone.utc)
+        # Convert to dict, using aliases (_id) and excluding None
         book_data = book.model_dump(by_alias=True, exclude_none=True)
         
         user_id = get_current_user_id()
         org_id = get_organisation_id()
         
-        if org_id is None:
-            org_check = False
-        else:
-            org_check = True
-
-       
         # 🔄 STEP 1: Resequence
         book_data = resequence_book_structure(book_data)
         
-        # STEP 2: Get accurate counts from IDs
+        # STEP 2: Update counters
         max_counters = get_max_sequences(book_data)
-
         book_data["chapter_count"] = max_counters["next_chapter_seq"]
         book_data["page_count"] = max_counters["next_page_seq"]
         book_data["image_count"] = max_counters["next_image_seq"]
+        # Extract _id for existence check and remove from data payload to avoid update errors
+        book_id_val = book_data.pop("_id", None)
         
-        
-        # # 🔢 STEP 2: Calculate counts (safe defaults)
-        # chapters = book_data.get("chapters", [])
-        
-        # #Use the following for a quick summary
-        # book_data["chapter_count"] = len(chapters)
-        # book_data["page_count"] = sum(len(ch.get("pages", [])) for ch in chapters)
-        # book_data["image_count"] = sum(
-        #     len(pg.get("images", []))
-        #     for ch in chapters
-        #     for pg in ch.get("pages", [])
-        # )
-
-        # -----------------------
-        # ✅ UPDATE EXISTING BOOK
-        # -----------------------
-        print (f"\n📗 Attempting to create/update book..with book id {book_data}.")
-        try:
-            if "_id" in book_data and book_data["_id"]: 
-                book_id = ObjectId(book_data["_id"])
-                existing = await books_collection.find_one({"_id": book_id})
-                if existing and existing.get("created_by") == user_id:
-                    existing_org_id = existing.get("org_id")
-                    if org_check:
-                        if existing_org_id != org_id:
-                            raise HTTPException(status_code=403, detail="You do not have permission to update this book.")
-                    
-                    result = await books_collection.update_one(
-                    {"_id": book_id},
-                    {"$set": book_data}
+        if book_id_val:
+            book_id = ObjectId(book_id_val)
+            existing = await books_collection.find_one({"_id": book_id})
+            
+            if existing:
+                # ✅ Compare as strings for robust matching
+                existing_creator = str(existing.get("created_by"))
+                current_user_id_str = str(user_id)
+                
+                if existing_creator == current_user_id_str:
+                    # Optional: Org check
+                    if org_id:
+                        existing_org = str(existing.get("org_id"))
+                        if existing_org != str(org_id):
+                             raise HTTPException(status_code=403, detail="Unauthorized: Organization mismatch.")
+                    # Update the existing record
+                    await books_collection.update_one(
+                        {"_id": book_id},
+                        {"$set": book_data}
                     )
-                    print(f"\nUpdated sequence counts: Chapter {book_data['chapter_count']},\nPage Count: {book_data['page_count']},\nImage Count: {book_data['image_count']}\n")
+                    
                     updated_doc = await books_collection.find_one({"_id": book_id})
-                    safe_updated_doc = convert_objectid_to_str(updated_doc)
-                    return safe_updated_doc
+                    return convert_objectid_to_str(updated_doc)
                 else:
-                    # raise HTTPException(status_code=403, detail="You do not have permission to update this book.")
-                    pass # should be created as new book
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to update book: {str(e)}")
+                    # ❌ Deny if user doesn't match, instead of falling through
+                    raise HTTPException(status_code=403, detail="You do not have permission to update this book.")
+            
+            # If book_id was provided but not found, you might want to 
+            # re-insert it or throw 404. Usually, re-inserting with a custom ID
+            # is risky, so throwing 404 is safer.
+            raise HTTPException(status_code=404, detail="Book with provided ID not found.")
         # ---------------------
-        # 🆕 CREATE NEW BOOK
+        # 🆕 CREATE NEW BOOK (No _id provided)
         # ---------------------
-        try:
-            book_data["book_status"] = "Draft" 
-            if user_id:
-                book_data["created_by"] = user_id
-            else:
-                book_data["created_by"] = "anonymous"
-            
-            book_data["created_at"] =  datetime.now(timezone.utc)
-            
-            if org_id:    
-                book_data["org_id"] = org_id
-
-            result = await books_collection.insert_one(book_data)
-            book_data["_id"] = result.inserted_id
-
-            
-            safe_book_data = convert_objectid_to_str(book_data)
-            print(f"📘 Created new book:{book_data['_id']}")
-
-            return safe_book_data
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to create book: {str(e)}")
+        book_data["book_status"] = "Draft" 
+        book_data["created_by"] = user_id or "anonymous"
+        book_data["created_at"] = datetime.now(timezone.utc)
+        
+        if org_id:    
+            book_data["org_id"] = org_id
+        result = await books_collection.insert_one(book_data)
+        book_data["_id"] = result.inserted_id
+        
+        return convert_objectid_to_str(book_data)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create/update book: {str(e)}")
+        # Detailed 500 error for debugging
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+
 
 # @router.post("/create_chapter")
 # async def create_book_chapter(
