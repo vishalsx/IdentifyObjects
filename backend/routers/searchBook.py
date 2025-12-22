@@ -360,7 +360,9 @@ async def get_page_images(
             "book_id": book_id,
             "chapter_identifier": chapter_identifier,
             "page_identifier": page_identifier,
-            "images": images_info
+            "images": images_info,
+            "story": page.get("story"), # added
+            "moral": page.get("moral")  # added
         }
 
     except Exception as e:
