@@ -809,8 +809,8 @@ async def get_images_from_pool(limit: int = 9, search_query: str = None, languag
                     "image_hash": obj_doc.get("image_hash", ""),
                     "object_name_en": (
                                 object_name_translated
-                                if object_name_translated
-                                else obj_doc.get("object_name_en", "")
+                                # if object_name_translated
+                                # else obj_doc.get("object_name_en", "")
                             ),
                     "image_base64": image_base64 or "",
                     "thumbnail_base64": (

@@ -12,9 +12,15 @@ class PyObjectId(ObjectId):
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type, handler: GetCoreSchemaHandler):
-        return core_schema.no_info_after_validator_function(
-            cls.validate,
-            core_schema.str_schema()
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.str_schema(),
+            python_schema=core_schema.union_schema([
+                core_schema.is_instance_schema(ObjectId),
+                core_schema.no_info_after_validator_function(cls.validate, core_schema.str_schema()),
+            ]),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda x: str(x)
+            ),
         )
 
     @classmethod
@@ -62,7 +68,7 @@ class Chapter(BaseModel):
 
 # ---------- Book Model ----------
 class Book(BaseModel):
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
     title: str
     language: str
     author: Optional[str] = None

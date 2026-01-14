@@ -80,8 +80,9 @@ async def validate_user_organisation(user: Dict[str, Any]) -> Dict[str, Any]:
         "org_name": organisation.get("org_name"),
         "languages_allowed": effective_langs,
         "logo_url": logo_url,
-        "org_id": organisation.get("org_id")
-    }   
+        "org_id": organisation.get("org_id"),
+        "org_code": organisation.get("org_code")
+    }
 
 
 

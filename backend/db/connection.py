@@ -367,7 +367,7 @@ class OrgCollectionWithFallback(OrgCollection):
 books_collection = OrgCollection(db.books)
 objects_collection = OrgCollectionWithFallback(db.objects) #Find objects with org_id or no org_id to make images shared acroos orgs
 translations_collection = OrgCollection(db.translations)
-
+contests_collection = OrgCollection(db.contests)
 
 
 # following collections dont need org_id isolation
@@ -377,6 +377,8 @@ roles_collection = db["roles"]
 users_collection = db["users"]
 languages_collection = db["languages"]
 organisations_collection = db["organisations"]
+
+contest_participants_collection = OrgCollection(db.contest_participants)
 
 
 

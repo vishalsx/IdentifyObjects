@@ -1,9 +1,9 @@
 # login.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
+from passlib.hash import bcrypt
 
-
-from typing import List
+from typing import List, Optional
 import jwt
 from datetime import datetime, timedelta, timezone
 
@@ -35,6 +35,11 @@ router = APIRouter()
 
 
 # --- UTILS ---
+# def hash_password(password: str) -> str:
+#     salt = bcrypt.gensalt()
+#     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+#     return hashed.decode('utf-8')
+
 def hash_password(password: str) -> str:
 
     if len(password.encode('utf-8')) > 72:
@@ -185,7 +190,12 @@ async def create_user(user: CreateUserRequest):
 
 # --- LOGIN ENDPOINT ---
 @router.post("/login", response_model=LoginResponse)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    # param2: Optional[str] = Form(None), # ✅ Capture param2 separately
+    # param3: Optional[str] = Form(None)  # ✅ Capture param3 separately
+):
+
     print("Login attempt for user:", form_data.username)
     print(f"\n DBNAME:{db.name}\nColletions:{await db.list_collection_names()} ")
     user = await get_user(form_data.username)
@@ -200,6 +210,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
         )
+    # ##for contest login only
+    # if param2 == "contest" and param3:
+    #      return {"message": "Login successful for contestant."} 
+    
+
     roles = user.get("roles", [])
     if isinstance(roles, str):
         roles = [roles]  # fallback for old users
@@ -223,6 +238,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     
     #check if user belongs to an organisation, languages allowed will come from organisation settings.
     org_data = await validate_user_organisation(user)
+
+    print("\n♥️🔴🔴Organisation data for user:", org_data)
     login_response = LoginResponse(
         access_token=access_token,
         token_type="bearer",
@@ -233,7 +250,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         permission_rules=permission_rules,
         org_name=org_data.get("org_name"),
         logo_url=org_data.get("logo_url"),
-        org_id=org_data.get("org_id")
+        org_id=org_data.get("org_id"),
+        org_code=org_data.get("org_code")
     )
 
     print("\nLogin successful for user:", login_response)

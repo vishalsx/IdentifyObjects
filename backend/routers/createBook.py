@@ -28,7 +28,7 @@ def get_max_sequences(book: dict) -> dict:
     (either dict or Pydantic model) and returns the next available ones.
     """
     # Handle both Pydantic and dict formats
-    book_id = str(book["_id"]) if isinstance(book, dict) else str(book.id)
+    book_id = str(book.get("_id", "")) if isinstance(book, dict) else str(getattr(book, "id", "") or "")
 
     # Extract nested structures safely
     chapters = book.get("chapters", []) if isinstance(book, dict) else (book.chapters or [])

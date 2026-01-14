@@ -17,7 +17,8 @@ from routers import (
     searchBook,
     createStory,
     createprompt,
-    createQuiz
+    createQuiz,
+    createContest
 )
 
 from routers.login import router as login_router
@@ -63,6 +64,7 @@ app.include_router(searchBook.router)
 app.include_router(createStory.router)
 app.include_router(createprompt.router)
 app.include_router(createQuiz.router)
+app.include_router(createContest.router)
 
 @app.get("/")
 def read_root():

@@ -22,6 +22,7 @@ class LoginResponse(BaseModel):
     org_name: Optional[str] = None
     logo_url: Optional[str] = None
     org_id: Optional[str] = None
+    org_code: Optional[str] = None
 
 class CreateUserRequest(BaseModel):
     username: str
