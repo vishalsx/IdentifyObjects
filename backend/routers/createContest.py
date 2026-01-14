@@ -34,8 +34,14 @@ async def create_contest(
         if contest.content_type == "Specialized" and not contest.specialized_theme:
              raise HTTPException(status_code=400, detail="Specialized theme is required for Specialized content type")
 
-        if not (contest.registration_start_at < contest.registration_end_at < contest.contest_start_at < contest.contest_end_at):
-             raise HTTPException(status_code=400, detail="Invalid date range sequence. Ensure: reg_start < reg_end < contest_start < contest_end")
+        if not (contest.registration_start_at < contest.registration_end_at):
+             raise HTTPException(status_code=400, detail="Registration start must be before registration end")
+
+        if not (contest.contest_start_at < contest.contest_end_at):
+             raise HTTPException(status_code=400, detail="Contest start must be before contest end")
+
+        if contest.registration_end_at >= contest.contest_end_at:
+             raise HTTPException(status_code=400, detail="Registration end must be before contest end")
 
         # Convert Pydantic model to dict
         contest_data = contest.model_dump(by_alias=True, exclude_none=True)
@@ -105,6 +111,17 @@ async def update_contest(
     new_status = validate_contest_state_transition(status, action)
     if not new_status:
         raise HTTPException(status_code=400, detail="Invalid action for current state")
+    
+    # Date Validation Logic
+    if not (contest.registration_start_at < contest.registration_end_at):
+         raise HTTPException(status_code=400, detail="Registration start must be before registration end")
+
+    if not (contest.contest_start_at < contest.contest_end_at):
+         raise HTTPException(status_code=400, detail="Contest start must be before contest end")
+
+    if contest.registration_end_at >= contest.contest_end_at:
+         raise HTTPException(status_code=400, detail="Registration end must be before contest end")
+         
     contest_data["status"] = new_status
     print ("\n🟢Contest_data", contest_data)
   
