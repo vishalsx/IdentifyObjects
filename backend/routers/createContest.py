@@ -55,6 +55,52 @@ async def create_contest(
         
         contest_data["created_at"] = datetime.now(timezone.utc)
         
+        # Default game structure if not provided
+        if not contest.game_structure:
+            contest_data["game_structure"] = {
+                "level_count": 2,
+                "levels": [
+                    {
+                        "level_name": "Level 1",
+                        "level_seq": 1,
+                        "game_type": "matching",
+                        "rounds": [
+                            {
+                                "round_name": "Round 1",
+                                "round_seq": 1,
+                                "time_limit_seconds": 60,
+                                "question_count": 5,
+                                "hints_used": "Short Hints",
+                                "difficulty_distribution": {
+                                    "easy": 3,
+                                    "medium": 2,
+                                    "hard": 0
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "level_name": "Level 2",
+                        "level_seq": 2,
+                        "game_type": "quiz",
+                        "rounds": [
+                            {
+                                "round_name": "Round 1",
+                                "round_seq": 1,
+                                "time_limit_seconds": 90,
+                                "question_count": 5,
+                                "object_count": 5,
+                                "difficulty_distribution": {
+                                    "easy": 3,
+                                    "medium": 2,
+                                    "hard": 0
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+
         # Handle contest_type and org_id
         if contest.contest_type == "Global":
              contest_data["org_id"] = None

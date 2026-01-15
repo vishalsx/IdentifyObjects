@@ -751,6 +751,11 @@ async def get_images_from_pool(limit: int = 9, search_query: str = None, languag
 
             # Logic to extract object_name from translations collection 
             object_name_translated = None
+            if language:
+                specific_language_case = True
+            else:
+                specific_language_case = False
+
             if language and translated_languages:
                 if language in translated_languages:
                     # Filter translations collection by strict org_id (since translations are always specific) AND status
@@ -803,6 +808,8 @@ async def get_images_from_pool(limit: int = 9, search_query: str = None, languag
 
             total_vote_count_human = _format_votes_human(total_net_votes)
             file_info = create_return_file_info(obj_doc) if obj_doc else {}
+            if specific_language_case is False: 
+                object_name_translated = obj_doc.get("object_name_en", "")
             
             return {
                 "poolImage": {

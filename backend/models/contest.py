@@ -212,3 +212,4 @@ class ContestCreate(Contest):
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     org_id: Optional[str] = None
     created_by: Optional[PyObjectId] = None
+    game_structure: Optional[GameStructure] = None
