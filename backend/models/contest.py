@@ -157,6 +157,7 @@ class Contest(BaseModel):
     contest_type: str = "Global" # "Global" or "Local". For Local contests, it will be tagged under an existing org 
     supported_languages: List[str] = Field(default_factory=list) #comes from selected languages available in the private or Public org.
     areas_of_interest: Optional[List[str]] = Field(default_factory=list) #tags to search for the contest. Can match with field_of_study, object_category or tags
+    generic_theme_type: Optional[str] = None # "Generic", "Category", or "Field of Study"
     org_id : Optional[str] = None #if contest_type is "Global" else its tagged under an existing org
     
     #Specilization of content as per the contest theme
@@ -164,6 +165,7 @@ class Contest(BaseModel):
     specialized_theme: Optional[str] = None #Specialised theme for the contest. E.G. ART, MUSIC, SCIENCE, MATHS etc. new content need to be developed using specific AI prompts.and
     specialized_org_id: Optional[str] = None #if content_type is "Specialized" else None. This is the org_id of the new org entirty created for contest with specialized content
     # Specialized theme can be defined as an AI prompt to generate content for the contest in the org's AI driven prompt
+    generic_theme_type: str = "Generic" # "Generic", "Category", or "Field of Study"
     
     # Time Configuration
     registration_start_at: datetime

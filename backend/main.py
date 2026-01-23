@@ -19,7 +19,9 @@ from routers import (
     createprompt,
     createQuiz,
     createContest,
-    import_content
+    import_content,
+    repository,
+    embeddings
 )
 
 from routers.login import router as login_router
@@ -67,6 +69,8 @@ app.include_router(createprompt.router)
 app.include_router(createQuiz.router)
 app.include_router(createContest.router)
 app.include_router(import_content.router)
+app.include_router(repository.router)
+app.include_router(embeddings.router)
 
 @app.get("/")
 def read_root():

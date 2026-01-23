@@ -233,6 +233,18 @@ class OrgCollectionWithFallback(OrgCollection):
             no_org_condition = {"$or": [{"org_id": {"$exists": False}}, {"org_id": None}]}
             return {"$and": [filter, no_org_condition]} if filter else no_org_condition
 
+    async def find_one(self, filter: Dict[str, Any] | None = None, *args, **kwargs):
+        """
+        Override find_one to sort by org_id descending.
+        This ensures that if both a Global (null org_id) and Org-specific (set org_id) document match,
+        the Org-specific one is returned (since "String" > None).
+        """
+        # Default sort if not provided
+        if "sort" not in kwargs:
+            kwargs["sort"] = [("org_id", -1)]
+        
+        return await super().find_one(filter, *args, **kwargs)
+
     def find(self, filter=None, *args, **kwargs):
         """
         Overloaded find() for objects_collection.
@@ -240,16 +252,19 @@ class OrgCollectionWithFallback(OrgCollection):
         Behavior:
         - If user has org_id => include docs with same org_id OR no org_id.
         - If user has no org_id => include only docs without org_id.
+        - Sorts by org_id descending to prioritize org-specific items.
         Returns a MotorCursor (not awaited).
         """
         org_id = get_organisation_id()
         filter = filter or {}
 
+        cursor = None
+
         # If caller has already applied org_id conditions manually, don’t override
         if "org_id" in str(filter):
-            return self.collection.find(filter, *args, **kwargs)
-
-        if org_id:
+            cursor = self.collection.find(filter, *args, **kwargs)
+        
+        elif org_id:
             org_fallback_filter = {
                 "$and": [
                     filter,
@@ -262,7 +277,7 @@ class OrgCollectionWithFallback(OrgCollection):
                     }
                 ]
             }
-            return self.collection.find(org_fallback_filter, *args, **kwargs)
+            cursor = self.collection.find(org_fallback_filter, *args, **kwargs)
         else:
             # No org user — restrict strictly to no-org data
             no_org_filter = {
@@ -276,7 +291,15 @@ class OrgCollectionWithFallback(OrgCollection):
                     }
                 ]
             }
-            return self.collection.find(no_org_filter, *args, **kwargs)
+            cursor = self.collection.find(no_org_filter, *args, **kwargs)
+
+        # Apply default sort if not present in kwargs (Motor passes kwargs to find, but sort can also be chained)
+        # Note: If 'sort' was passed in kwargs, Motor handles it. 
+        # If NOT in kwargs, we force a sort on the cursor.
+        if "sort" not in kwargs:
+            cursor.sort("org_id", -1)
+            
+        return cursor
 
 
     def aggregate(self, pipeline: list, *args, **kwargs):

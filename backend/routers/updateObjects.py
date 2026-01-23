@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from services.db_crud import save_to_db, update_status_only
+from services.translations_summary import update_translation_summary
 from services.userauth import get_current_user
 import json, traceback
 from bson import ObjectId
@@ -58,6 +59,16 @@ async def update_object(
                     response.extend(resp if isinstance(resp, list) else [resp])
 
         safe_response = [clean_mongo_document(r) if isinstance(r, dict) else r for r in response]
+        
+        # Trigger background update for translation summary
+        if background_tasks:
+            for resp_item in response:
+                if isinstance(resp_item, dict):
+                    obj_id = resp_item.get("object_id")
+                    trans_id = resp_item.get("translation_id")
+                    if obj_id and trans_id:
+                        background_tasks.add_task(update_translation_summary, obj_id, trans_id)
+        
         return JSONResponse(content=safe_response)
 
     except json.JSONDecodeError:

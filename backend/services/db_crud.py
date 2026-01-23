@@ -444,7 +444,7 @@ async def save_to_db(image_name: str,image: UploadFile, image_hash:str , common_
 
     # Update vector embedding of Object data alongwith translations data for multilingual vector search
     try: # Trigger background task to update embedding
-            background_tasks.add_task(update_object_embeddings,obj_id)  
+            background_tasks.add_task(update_object_embeddings,obj_id,translation_id)  
     except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
 
