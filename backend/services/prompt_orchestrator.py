@@ -154,7 +154,7 @@ You will always receive input in the following format inside the HumanMessage:
 {
 "target_language": "<language name>",
 "language_script": "<writing script>"
-"additional_context": "<Must consider optional additional context about the object or any related information in your response. If no additional context is provided, ignore this field.>"
+"additional_context": "<Must consider optional additional context about the object or any related information in your response. You must be able to interpret this context in target_language and language_script if specified. If no additional context is provided or if this tag is blank or NULL then ignore this field.>"
 }
 You will also receive an image encoded as base64.
 

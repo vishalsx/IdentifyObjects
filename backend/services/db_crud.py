@@ -323,17 +323,9 @@ async def save_to_db(image_name: str,image: UploadFile, image_hash:str , common_
                         "$push": {"audit_trail": audit_entry}
                     }
                     )
-                ##Following block moved just before return statement to ensure embedding update after Object and translation insert
-
-                # try: # Trigger background task to update embeddings if English
-                #     background_tasks.add_task(update_object_embeddings,obj_id)  
-                # except Exception as e:
-                #     raise HTTPException(status_code=500, detail=f"Failed to schedule background embeddings: {str(e)}")
 
                 else: #just update the state transition if not english
-                    print("\nUpdating only status of Object as the language is not English.")
-                    
-                    
+                    print("\nUpdating only status of Object as the language is not English.")    
                     new_value = {
                                 
                                 "image_status": await get_permission_state_metadata (existing_object.get("image_status"), permission_action ),
@@ -437,10 +429,8 @@ async def save_to_db(image_name: str,image: UploadFile, image_hash:str , common_
     except Exception as e:
         print(f"MongoDB insert error on translation collection: {e}") # Not sure why error.
         raise HTTPException(status_code=500, detail="Failed to save translation to database")
-   
-   
-    #just get the fking translation id before returning...
-    
+
+    #just get the fking translation id before returning... 
     existing_doc = await translations_collection.find_one(
     {
     "object_id": obj_id,
@@ -503,19 +493,6 @@ def map_translation_collection(translation_coll: any):
         }
         return translation_coll_mapped
     return {"error": "No translation data found.."}
-
-# def create_return_file_info(obj_coll: any ) -> dict:
-#     if obj_coll and "file_info" in obj_coll:
-        
-#         file_info_return = obj_coll.get("file_info", {})
-#         file_info_return.update({"created_by": obj_coll.get("metadata", {}).get("created_by", {})}) #merging file info from metadata if any
-#         file_info_return.update(obj_coll.get("metadata", {}).get("created_at", {})) #merging file info from metadata if any
-#         file_info_return.update(obj_coll.get("metadata", {}).get("updated_by", {})) #merging file info from metadata if any
-#         file_info_return.update(obj_coll.get("metadata", {}).get("updated_at", {})) #merging file info from metadata if any
-        
-#     return {file_info_return}
-
-
 
 #getting rid of existing challenges. returning normal object names
 async def get_existing_data_imagehash(imagehash: str, language: str): 
