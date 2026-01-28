@@ -26,3 +26,5 @@ build/
 .streamlit/secrets.toml
 __pycache__/
 *.pyc
+scripts/
+routers/tubstudio.code-workspace
