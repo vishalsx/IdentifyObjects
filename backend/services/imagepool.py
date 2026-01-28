@@ -540,14 +540,14 @@ async def _process_single_object_for_pool(obj_data: Dict[str, Any], target_langu
         else:
             # For non-org users: use global only
             translated_langs = translation_summary.get("global", {}).get("translated_languages", [])
-        
+        print (f"\n[Translated languages for object {object_obj_id}]: {translated_langs}")
         untranslated_languages = [lang for lang in languages_allowed if lang not in translated_langs]
         
-        if not untranslated_languages:
-            logger.debug(f"Object {object_obj_id} is fully translated for user's allowed languages. Skipping.")
+        if not untranslated_languages and not target_language:
+            print(f"Object {object_obj_id} is fully translated for user's allowed languages. Skipping.")
             return None
         
-        logger.info(f"Object {object_obj_id}: Translated={translated_langs}, Untranslated={untranslated_languages}")
+        print(f"Object {object_obj_id}: Translated={translated_langs}, Untranslated={untranslated_languages}")
 
         # Fetch the full object document if not already fetched by search
         obj_doc = obj_data if "image_store" in obj_data else await objects_collection.find_one(
@@ -605,11 +605,8 @@ async def _process_single_object_for_pool(obj_data: Dict[str, Any], target_langu
         return {
             "poolImage": {
                 "image_hash": obj_doc.get("image_hash", ""),
-                "object_name_en": (
-                            object_name_translated
-                            # if object_name_translated
-                            # else obj_doc.get("object_name_en", "")
-                        ),
+                "object_name_en": obj_doc.get("object_name_en", ""),
+                "object_name": object_name_translated if object_name_translated else "",
                 "object_id": str(object_obj_id),
                 "image_base64": image_base64,
                 "thumbnail_base64": thumbnail_b64,
