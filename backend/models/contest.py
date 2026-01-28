@@ -62,9 +62,10 @@ def validate_contest_state_transition(current_state: Optional[str], action: str)
 MultilingualStr = Dict[str, str]
 
 class RoundDifficultyDistribution(BaseModel):
-    easy: float = 0.0
+    low: float = 0.0
     medium: float = 0.0
-    hard: float = 0.0
+    high: float = 0.0
+    very_high: float = 0.0
 
 class RoundStructure(BaseModel):
     round_name: str
@@ -182,7 +183,7 @@ class Contest(BaseModel):
     
     # Participation Rules
     max_participants: int = 0
-
+    max_incomplete_attempts: int = Field(default=3, description="Maximum number of times a user can exit and resume the contest")
     
     # Eligibility Rules
     eligibility_rules: EligibilityRules
